@@ -129,9 +129,9 @@ def check_volume(symbol, multiplier=5):
     if current_volume > volume_ma96 * multiplier and open_deviation > 0.005 and close_deviation > 0.02:
         # print(f"🚨 {symbol} 当前15分钟成交量 ({current_volume}) 超过 MA96 ({volume_ma96 * multiplier}) 的{multiplier}倍！")
         # 仓位大小，为量能倍数乘以偏离数，量能越大、偏离越大，开的仓位越大
-        position = current_volume / volume_ma96 *  close_deviation * 100
+        position = current_volume / volume_ma96 *  close_deviation * 100 * 100
         number = position / current_close
-        print(f"🚨 {symbol} 当前15分钟放量！合约下单数量为{number:.2f}")
+        print(f"🚨 {symbol} 当前15分钟{multiplier}倍放量！价格偏离{close_deviation}！建议合约下单数量为{number:.2f}")
         # 通知到手机端
         # notify(symbol, current_volume, volume_ma96, multiplier, pushkey)
         threading.Thread(target=beep_for_5s).start()
