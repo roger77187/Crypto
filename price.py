@@ -12,13 +12,11 @@ BASE_URL = "https://api.binance.com"
 
 # 历史K线缓存
 kline_cache = {}
-
-# 上次刷新K线时间
 last_kline_update = {}
 
 # 设置代理（如有）
 proxies = {
-    "http": "http://127.0.0.1:42010",     # 视你的代理工具而定
+    "http": "http://127.0.0.1:42010",
     "https": "http://127.0.0.1:42010"
 }
 
@@ -33,16 +31,17 @@ def beep_for_5s():
         import os
         os.system('play -nq -t alsa synth 0.5 sine 880 repeat 10 || echo "\a"')
 
-# 获取实时价格
-def get_price(symbol):
+# 合并获取所有币种实时价格
+def get_all_prices():
     try:
         url = f"{BASE_URL}/api/v3/ticker/price"
-        r = requests.get(url, params={"symbol": symbol}, proxies=proxies, timeout=10)
+        r = requests.get(url, proxies=proxies, timeout=10)
         data = r.json()
-        return float(data["price"])
+        prices = {item['symbol']: float(item['price']) for item in data if item['symbol'] in symbols}
+        return prices
     except Exception as e:
-        print(f"❌ 获取实时价格失败: {symbol} {e}")
-        return None
+        print(f"❌ 获取合并价格失败: {e}")
+        return {}
 
 # 获取最近9根K线的close
 def get_kline(symbol):
@@ -61,6 +60,8 @@ def get_kline(symbol):
 def poll_loop():
     while True:
         now = datetime.now()
+        prices = get_all_prices()
+
         for symbol in symbols:
             # 每15分钟刷新K线
             if symbol not in last_kline_update or now - last_kline_update[symbol] >= timedelta(minutes=15):
@@ -71,19 +72,18 @@ def poll_loop():
                 else:
                     continue
 
-            # 读取实时价格
-            price = get_price(symbol)
+            # 实时价格
+            price = prices.get(symbol)
             if price is None or symbol not in kline_cache or len(kline_cache[symbol]) < 9:
                 continue
 
-            # 计算 MA10（最近9根K线 + 当前实时价格）
+            # MA10 = 最近9根K线 + 实时价格
             closes = kline_cache[symbol]
             ma10 = (sum(closes) + price) / 10
             deviation = abs(price - ma10) / ma10
 
             print(f"{symbol}: 当前={price:.4f}, MA10={ma10:.4f}, 偏离={deviation:.2%}")
 
-            # 偏离超过 3% 告警
             if deviation > 0.03:
                 print(f"🚨 {symbol} 偏离 MA10 超过 3%")
                 threading.Thread(target=beep_for_5s).start()
