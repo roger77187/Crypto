@@ -4,9 +4,10 @@ import threading
 import platform
 from datetime import datetime, timedelta
 import pandas as pd
+import winsound
 
 # 币种列表
-symbols = ["TIAUSDT", "SUIUSDT", "ARBUSDT", "SOLUSDT", "AAVEUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT", "ETHUSDT"]
+symbols = ["TIAUSDT", "SUIUSDT", "ARBUSDT", "SOLUSDT", "AAVEUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT", "ETHUSDT", "ADAUSDT"]
 
 # Binance API 地址
 BASE_URL = "https://fapi.binance.com/"
@@ -49,14 +50,13 @@ def notify(symbol, current_volume, ma96, multiplier, pushkey):
 
 # 蜂鸣器函数
 def beep_for_5s():
-    system = platform.system()
-    if system == "Windows":
-        import winsound
-        for _ in range(5):
-            winsound.Beep(1000, 500)
-    else:
-        import os
-        os.system('play -nq -t alsa synth 0.5 sine 880 repeat 10 || echo "\a"')
+    """持续5秒的蜂鸣声（Windows）"""
+    try:
+        duration = 5000   # 持续5秒（5000毫秒）
+        frequency = 1000  # 1000Hz高频警报音
+        winsound.Beep(frequency, duration)
+    except Exception as e:
+        print(f"蜂鸣失败: {e}")
 
 # 以Restful从币安获取15分钟K线数据
 def get_kline(symbol,limit=96):
@@ -123,17 +123,18 @@ def check_volume(symbol, multiplier=5):
     # print(f"{symbol}开盘价与MA14的偏离: {open_deviation} ")
     close_deviation = abs(current_close - price_ma14) / price_ma14
     # print(f"{symbol}收盘价与MA14的偏离: {close_deviation} ")
+    factor = current_volume / volume_ma96
 
 
     # 比较成交量是否超过 MA96 的指定倍数
-    if current_volume > volume_ma96 * multiplier and open_deviation > 0.005 and close_deviation > 0.02:
+    if factor > multiplier and open_deviation > 0.01 and close_deviation > 0.02:
         # print(f"🚨 {symbol} 当前15分钟成交量 ({current_volume}) 超过 MA96 ({volume_ma96 * multiplier}) 的{multiplier}倍！")
         # 仓位大小，为量能倍数乘以偏离数，量能越大、偏离越大，开的仓位越大
-        position = current_volume / volume_ma96 *  close_deviation * 100 * 100
+        position = factor *  close_deviation * 100 * 100
         number = position / current_close
-        print(f"🚨 {symbol} 当前15分钟{multiplier}倍放量！价格偏离{close_deviation}！建议合约下单数量为{number:.2f}")
+        print(f"🚨 {symbol} 当前15分钟{factor:.1f}倍放量! 价格偏离{close_deviation:.1%}！ 建议合约下单数量为{number:.2f}")
         # 通知到手机端
-        # notify(symbol, current_volume, volume_ma96, multiplier, pushkey)
+        notify(symbol, current_volume, volume_ma96, multiplier, pushkey)
         threading.Thread(target=beep_for_5s).start()
 
 # 定时执行任务：每小时的特定时刻检查成交量
@@ -143,7 +144,7 @@ def schedule_volume_check(multiplier=5):
         now = datetime.now()
 
         # 判断当前时间是否是指定的检查时刻：
-        if now.minute in [14, 29, 44, 59] and now.second == 30:
+        if now.minute in [14, 29, 44, 59] and now.second == 20:
             print(f"⚡ {now.strftime('%H:%M:%S')} 开始检查成交量...")
             for symbol in symbols:
                 # 每个代币取完数休息，避免请求频繁被币安屏蔽
@@ -154,7 +155,7 @@ def schedule_volume_check(multiplier=5):
 
 # 启动定时任务
 if __name__ == "__main__":
-    # 在这里传入你需要的倍数值，例如 4倍，10倍等
-    schedule_volume_check(multiplier=4)  # 默认是5倍，可以根据需求传递不同倍数
+    # 在这里传入你需要的倍数值，例如 3倍，10倍等
+    schedule_volume_check(multiplier=2)  # 默认是5倍，可以根据需求传递不同倍数
     #for symbol in symbols:
     #    check_volume(symbol, multiplier=4)
