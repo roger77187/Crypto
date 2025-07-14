@@ -55,7 +55,7 @@ def is_uptrend(symbol, proxy_cycle):
         return False
 
     if ma14_list[0] < ma14_list[1] < ma14_list[2] and prev_close > ma14_list[1]:
-        # print(f"📈 {symbol} 处于上升趋势")
+        print(f"📈 {symbol} 处于上升趋势")
         return True
     else:
         # print(f"📉 {symbol} 不符合上升趋势条件")
@@ -72,7 +72,7 @@ def is_downtrend(symbol, proxy_cycle):
         return False
 
     if ma14_list[0] > ma14_list[1] > ma14_list[2] and prev_close < ma14_list[1]:
-        # print(f"🔻 {symbol} 处于下降趋势")
+        print(f"🔻 {symbol} 处于下降趋势")
         return True
     else:
         # print(f"📈 {symbol} 不符合下降趋势条件")
