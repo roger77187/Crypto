@@ -12,6 +12,32 @@ from trend import is_uptrend, is_downtrend
 # 币种列表
 symbols = ["TIAUSDT", "SUIUSDT", "ARBUSDT", "SOLUSDT", "AAVEUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT",  "ADAUSDT"]
 
+# 各代币是否上升趋势的字典
+up_trend_map = {
+    "TIAUSDT": False,
+    "SUIUSDT": False,
+    "ARBUSDT": False,
+    "SOLUSDT": False,
+    "AAVEUSDT": False,
+    "XRPUSDT": False,
+    "LTCUSDT": False,
+    "DOGEUSDT": False,
+    "ADAUSDT": False
+}
+
+# 各代币是否上升趋势的字典
+down_trend_map = {
+    "TIAUSDT": False,
+    "SUIUSDT": False,
+    "ARBUSDT": False,
+    "SOLUSDT": False,
+    "AAVEUSDT": False,
+    "XRPUSDT": False,
+    "LTCUSDT": False,
+    "DOGEUSDT": False,
+    "ADAUSDT": False
+}
+
 
 # 设置代理（如有）
 proxies = {
@@ -73,13 +99,29 @@ def caculate_ma14(prices):
     ma14 = sum(last_14_closes) / len(last_14_closes)
     return ma14
 
+# 更新各代币日线趋势的字典
+def update_trend_dict(proxy_cycle):
+    for symbol in symbols:
+        # 查询日线K线数据，判断代币是否处于上升趋势或者下降趋势
+        up_trend_map[symbol] = is_uptrend(symbol, proxy_cycle)
+        time.sleep(0.5)
+        down_trend_map[symbol] = is_downtrend(symbol, proxy_cycle)
+        time.sleep(0.5)
+    
+# 判断日线是否处于上升趋势
+def query_up_trend(symbol):
+    return up_trend_map.get(symbol, False)  # 如果不存在，返回默认 False
+
+# 判断日线是否处于下降趋势
+def query_down_trend(symbol):
+    return down_trend_map.get(symbol, False)  # 如果不存在，返回默认 False
 
 # 查询并处理各币种的成交量
 def check_volume(symbol, proxy_cycle):
 
     # 查询日线K线数据，判断代币是否处于上升趋势或者下降趋势
-    uptrend = is_uptrend(symbol, proxy_cycle)
-    downtrend = is_downtrend(symbol, proxy_cycle)
+    uptrend = query_up_trend(symbol)
+    downtrend = query_down_trend(symbol)
 
     # 读取15分钟K线数据
     data = get_kline(symbol, proxy_cycle)
@@ -159,20 +201,28 @@ def schedule_volume_check(proxy_cycle):
     while True:
         now = datetime.now()
 
+        # 每隔一小时更新一下K线日线趋势
+        if now.minute == 10 and  now.second == 30:
+            print(f"⚡ {now.strftime('%H:%M:%S')} 更新日线趋势判断...")
+            update_trend_dict(proxy_cycle)
+
         # 判断当前时间是否是指定的检查时刻：
         if now.minute in [14, 29, 44, 59] and now.second == 20:
             print(f"⚡ {now.strftime('%H:%M:%S')} 开始检查成交量...")
             for symbol in symbols:
                 # 每个代币取完数休息，避免请求频繁被币安屏蔽
-                time.sleep(0.5)
+                time.sleep(1)
                 check_volume(symbol, proxy_cycle)
-        time.sleep(0.5)  # 每秒检查一次时间
+        time.sleep(0.3)  # 每秒检查一次时间
 
 
 # 启动定时任务
 if __name__ == "__main__":
     proxy_ports = [42010, 42011, 42013, 42012, 42002, 42004]
     proxy_cycle = cycle(proxy_ports)  # 轮询器
+
+    # 初始化日线趋势判断
+    update_trend_dict(proxy_cycle)
     
     print(f"定时程序已经启动...请勿关闭窗口！")
     schedule_volume_check(proxy_cycle)  
