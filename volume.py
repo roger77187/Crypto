@@ -5,14 +5,13 @@ import platform
 from datetime import datetime, timedelta
 import pandas as pd
 import winsound
+from utils import fetch_with_proxy
+from itertools import cycle
+from trend import is_uptrend, is_downtrend
 
 # 币种列表
-symbols = ["TIAUSDT", "SUIUSDT", "ARBUSDT", "SOLUSDT", "AAVEUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT", "ETHUSDT", "ADAUSDT"]
+symbols = ["TIAUSDT", "SUIUSDT", "ARBUSDT", "SOLUSDT", "AAVEUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT",  "ADAUSDT"]
 
-# Binance API 地址
-BASE_URL = "https://fapi.binance.com/"
-
-pushkey = "PDU35961TPdv1z3nSCKLpXehgf1lEZ0AoROwsKKcX"
 
 # 设置代理（如有）
 proxies = {
@@ -21,32 +20,21 @@ proxies = {
 }
 
 
-# 推送告警到手机上的PushDeer
-def pushdeer_notify(title, message, pushkey="PDU35961TPdv1z3nSCKLpXehgf1lEZ0AoROwsKKcX"):
-    url = f"https://api2.pushdeer.com/message/push"
-    params = {
-        "pushkey": pushkey,
-        "text": title,
-        "desp": message,
-        "type": "markdown"  # 你也可以使用 'text'
-    }
-    try:
-        response = requests.get(url, params=params, timeout=5)
-        if response.status_code == 200:
-            print("✅ 已推送到手机")
-        else:
-            print(f"⚠️ 推送失败: {response.text}")
-    except Exception as e:
-        print(f"❌ 推送异常: {e}")
+# 通知到钉钉的群里面
+def send_dingtalk_msg(content):
 
-def notify(symbol, current_volume, ma96, multiplier, pushkey):
-    message = (
-        f"🚨 **{symbol} 成交量异常**\n\n"
-        f"- 当前成交量: `{current_volume}`\n"
-        f"- MA96: `{ma96}`\n"
-        f"- 阈值: `{ma96 * multiplier}`\n"
-    )
-    pushdeer_notify("成交量预警", message, pushkey)  
+    webhook = "https://oapi.dingtalk.com/robot/send?access_token=7cec8580bca47a2ce6296bfc3db372f4d01e4a1db7a7caec472aa00fe16b61c7"    
+
+    data = {
+        "msgtype": "text",
+        "text": {
+            "content": content
+        }
+    }
+
+    headers = {'Content-Type': 'application/json'}
+    requests.post(webhook, json=data, headers=headers)    
+
 
 # 蜂鸣器函数
 def beep_for_5s():
@@ -58,16 +46,14 @@ def beep_for_5s():
     except Exception as e:
         print(f"蜂鸣失败: {e}")
 
+
 # 以Restful从币安获取15分钟K线数据
-def get_kline(symbol,limit=96):
-    try:
-        url = f"{BASE_URL}/fapi/v1/klines"
-        params = {"symbol": symbol, "interval": "15m", "limit": limit}
-        r = requests.get(url, params=params, proxies=proxies, timeout=10)
-        return r.json()
-    except Exception as e:
-        print(f"❌ 获取K线失败: {symbol} {e}")
-        return None
+def get_kline(symbol,proxy_cycle,limit=96):
+
+    url = f"https://fapi.binance.com/fapi/v1/klines"
+    params = {"symbol": symbol, "interval": "15m", "limit": limit}
+    return fetch_with_proxy(url, params, proxy_cycle=proxy_cycle)
+
 
 
 # 计算成交量的 MA96
@@ -76,6 +62,7 @@ def calculate_ma96(volumes):
     if len(volumes) < 96:
         return None
     return sum(volumes) / 96
+
 
 # 计算成交价的 MA14
 def caculate_ma14(prices):
@@ -88,9 +75,14 @@ def caculate_ma14(prices):
 
 
 # 查询并处理各币种的成交量
-def check_volume(symbol, multiplier=5):
+def check_volume(symbol, proxy_cycle):
 
-    data = get_kline(symbol)
+    # 查询日线K线数据，判断代币是否处于上升趋势或者下降趋势
+    uptrend = is_uptrend(symbol, proxy_cycle)
+    downtrend = is_downtrend(symbol, proxy_cycle)
+
+    # 读取15分钟K线数据
+    data = get_kline(symbol, proxy_cycle)
 
     if not data:
         print(f"获取 {symbol} 的K线失败或返回为空")
@@ -119,26 +111,50 @@ def check_volume(symbol, multiplier=5):
     current_open = opens[-1]
     current_close = closes[-1]
 
+    # 开盘价相对MA14的偏离率
     open_deviation = abs(current_open - price_ma14) / price_ma14
     # print(f"{symbol}开盘价与MA14的偏离: {open_deviation} ")
+    # 收盘价相对MA14的偏离率
     close_deviation = abs(current_close - price_ma14) / price_ma14
     # print(f"{symbol}收盘价与MA14的偏离: {close_deviation} ")
-    factor = current_volume / volume_ma96
+
+    # 成交量放大倍数
+    volume_times = current_volume / volume_ma96
+
+    # 开盘价与MA14已经有偏离，避免刚从整理平台选择方向的情况
+    if(open_deviation > 0.01) :
+        # 默认的放量倍数是6倍，逆势操作的高要求
+        volume_multiple = 5
+        # 成交量放大倍数和MA14价格偏离率的偏移
+        factor_multiple = 0.22
+        factor = volume_times * close_deviation
+
+        # 顺势的情况，放量倍数可以适当降低要求
+        if((uptrend and current_close / price_ma14 < 0.99) or (downtrend and current_close / price_ma14 > 1.01) ) :
+            volume_multiple = 2
+            factor_multiple = 0.07
+
+        # 放量价格异动
+        if factor >  factor_multiple:
+            order = "多单"
+            if(current_close > current_open) :
+                order = "空单"
+              
+            # 仓位大小，为量能倍数乘以价格偏离数，量能越大、偏离越大，开的仓位越大
+            position = factor * 100 * 100
+            number = position / current_close
+            message=f"Lucky:🚨\n {symbol}\n 当前15分钟{volume_times:.1f}倍放量!  价格偏离{close_deviation:.1%}！\n 建议开仓{order}数量为{number:.2f}"
+            # 电脑屏幕打印日志
+            print(message)
+            # 通知到手机钉钉
+            send_dingtalk_msg(message)
+            # 电脑声音告警
+            # threading.Thread(target=beep_for_5s).start() 
 
 
-    # 比较成交量是否超过 MA96 的指定倍数
-    if factor > multiplier and open_deviation > 0.01 and close_deviation > 0.02:
-        # print(f"🚨 {symbol} 当前15分钟成交量 ({current_volume}) 超过 MA96 ({volume_ma96 * multiplier}) 的{multiplier}倍！")
-        # 仓位大小，为量能倍数乘以偏离数，量能越大、偏离越大，开的仓位越大
-        position = factor *  close_deviation * 100 * 100
-        number = position / current_close
-        print(f"🚨 {symbol} 当前15分钟{factor:.1f}倍放量! 价格偏离{close_deviation:.1%}！ 建议合约下单数量为{number:.2f}")
-        # 通知到手机端
-        notify(symbol, current_volume, volume_ma96, multiplier, pushkey)
-        threading.Thread(target=beep_for_5s).start()
 
 # 定时执行任务：每小时的特定时刻检查成交量
-def schedule_volume_check(multiplier=5):
+def schedule_volume_check(proxy_cycle):
 
     while True:
         now = datetime.now()
@@ -148,14 +164,17 @@ def schedule_volume_check(multiplier=5):
             print(f"⚡ {now.strftime('%H:%M:%S')} 开始检查成交量...")
             for symbol in symbols:
                 # 每个代币取完数休息，避免请求频繁被币安屏蔽
-                time.sleep(0.3)
-                check_volume(symbol, multiplier)
+                time.sleep(0.5)
+                check_volume(symbol, proxy_cycle)
         time.sleep(0.5)  # 每秒检查一次时间
 
 
 # 启动定时任务
 if __name__ == "__main__":
-    # 在这里传入你需要的倍数值，例如 3倍，10倍等
-    schedule_volume_check(multiplier=2)  # 默认是5倍，可以根据需求传递不同倍数
-    #for symbol in symbols:
-    #    check_volume(symbol, multiplier=4)
+    proxy_ports = [42010, 42011, 42013, 42012, 42002, 42004]
+    proxy_cycle = cycle(proxy_ports)  # 轮询器
+    
+    print(f"定时程序已经启动...请勿关闭窗口！")
+    schedule_volume_check(proxy_cycle)  
+    # for symbol in symbols:
+    #    check_volume(symbol, proxy_cycle)
