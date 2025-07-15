@@ -66,7 +66,7 @@ def send_dingtalk_msg(content):
 def beep_for_5s():
     """持续5秒的蜂鸣声（Windows）"""
     try:
-        duration = 5000   # 持续5秒（5000毫秒）
+        duration = 10000   # 持续10秒（10000毫秒）
         frequency = 1000  # 1000Hz高频警报音
         winsound.Beep(frequency, duration)
     except Exception as e:
@@ -131,20 +131,24 @@ def check_volume(symbol, proxy_cycle):
         return   
 
     # 开盘价、收盘价、成交量转换数据类型
-    closes = [float(k[4]) for k in data]  # 第5列是 close
-    opens = [float(k[1]) for k in data]  # 第2列是 close
+    opens = [float(k[1]) for k in data]   # 第2列是 开盘价
+    highs = [float(k[2]) for k in data]   # 第3列是 最高价
+    lows = [float(k[3]) for k in data]    # 第4列是 最低价
+    closes = [float(k[4]) for k in data]  # 第5列是 收盘价
     volumes = [float(k[5]) for k in data]  # 取成交量（K线的第6个字段）
+
 
     if not volumes:
         return
 
-    # 计算 MA96
+    # 计算成交量的MA96
     volume_ma96 = calculate_ma96(volumes)
     # print(f"{symbol}成交量的MA96: {volume_ma96} ")
     if volume_ma96 is None:
         print(f"⚠️ {symbol} 的K线数据不足96根，跳过计算")
         return
 
+    # 以收盘价计算价格的MA14
     price_ma14 = caculate_ma14(closes)
     # print(f"{symbol}收盘价的MA14: {price_ma14} ")
 
@@ -152,46 +156,56 @@ def check_volume(symbol, proxy_cycle):
     current_volume = volumes[-1]
     current_open = opens[-1]
     current_close = closes[-1]
+    current_low = lows[-1]
+    current_high = highs[-1]
 
     # 开盘价相对MA14的偏离率
-    open_deviation = abs(current_open - price_ma14) / price_ma14
-    # print(f"{symbol}开盘价与MA14的偏离: {open_deviation} ")
-    # 收盘价相对MA14的偏离率
-    close_deviation = abs(current_close - price_ma14) / price_ma14
-    # print(f"{symbol}收盘价与MA14的偏离: {close_deviation} ")
-
+    open_deviation = 0
+    # 盘中价相对MA14的最大偏离率
+    max_deviation = 0
     # 成交量放大倍数
     volume_times = current_volume / volume_ma96
 
+    
+    # 开盘价低于MA14，说明当前15分钟K线处于下跌状态
+    if (current_open < price_ma14):
+        open_deviation = (price_ma14 - current_open) / current_open
+        max_deviation = (price_ma14 - current_low) / current_low
+    else:
+        open_deviation = (current_open - price_ma14) / price_ma14
+        max_deviation = (current_high - price_ma14) / price_ma14
+
+    # print(f"{symbol}开盘价与MA14的偏离: {open_deviation:.1%} ")
+    # print(f"{symbol}盘中价与MA14的最大偏离: {max_deviation:.1%} ")
+
     # 开盘价与MA14已经有偏离，避免刚从整理平台选择方向的情况
-    if(open_deviation > 0.01) :
+    if(open_deviation > 0.009) :
         # 默认的放量倍数是6倍，逆势操作的高要求
-        volume_multiple = 5
-        # 成交量放大倍数和MA14价格偏离率的偏移
-        factor_multiple = 0.22
-        factor = volume_times * close_deviation
+        volume_multiple = 6
+        # 成交量放大倍数和MA14价格偏离率的偏移基准，逆势操作的高要求       
+        factor_multiple = 0.23
+        factor = volume_times * max_deviation
 
         # 顺势的情况，放量倍数可以适当降低要求
         if((uptrend and current_close / price_ma14 < 0.99) or (downtrend and current_close / price_ma14 > 1.01) ) :
-            volume_multiple = 2
-            factor_multiple = 0.07
+            volume_multiple = 2.2
+            factor_multiple = 0.08
 
         # 放量价格异动
         if factor >  factor_multiple:
             order = "多单"
             if(current_close > current_open) :
-                order = "空单"
-              
+                order = "空单"             
             # 仓位大小，为量能倍数乘以价格偏离数，量能越大、偏离越大，开的仓位越大
             position = factor * 100 * 100
             number = position / current_close
-            message=f"Lucky:🚨\n {symbol}\n 当前15分钟{volume_times:.1f}倍放量!  价格偏离{close_deviation:.1%}！\n 建议开仓{order}数量为{number:.2f}"
+            message=f"Lucky:🚨\n {symbol}\n 当前15分钟{volume_times:.1f}倍放量!  价格最大偏离{max_deviation:.1%}！\n 建议开仓{order}数量为{number:.2f}!\n 建议下单价格为5分钟K线最后一根下跌放量收盘价附近。"
             # 电脑屏幕打印日志
             print(message)
             # 通知到手机钉钉
             send_dingtalk_msg(message)
             # 电脑声音告警
-            # threading.Thread(target=beep_for_5s).start() 
+            threading.Thread(target=beep_for_5s).start() 
 
 
 
@@ -202,7 +216,7 @@ def schedule_volume_check(proxy_cycle):
         now = datetime.now()
 
         # 每隔一小时更新一下K线日线趋势
-        if now.minute == 10 and  now.second == 30:
+        if now.minute == 8 and  now.second == 30:
             print(f"⚡ {now.strftime('%H:%M:%S')} 更新日线趋势判断...")
             update_trend_dict(proxy_cycle)
 
@@ -226,5 +240,5 @@ if __name__ == "__main__":
     
     print(f"定时程序已经启动...请勿关闭窗口！")
     schedule_volume_check(proxy_cycle)  
-    # for symbol in symbols:
+    #for symbol in symbols:
     #    check_volume(symbol, proxy_cycle)
