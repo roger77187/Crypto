@@ -51,7 +51,7 @@ def send_dingtalk_msg(content):
 
     webhook = "https://oapi.dingtalk.com/robot/send?access_token=7cec8580bca47a2ce6296bfc3db372f4d01e4a1db7a7caec472aa00fe16b61c7"    
 
-    data = {
+    msg = {
         "msgtype": "text",
         "text": {
             "content": content
@@ -59,7 +59,7 @@ def send_dingtalk_msg(content):
     }
 
     headers = {'Content-Type': 'application/json'}
-    requests.post(webhook, json=data, headers=headers)    
+    requests.post(webhook, json=msg, headers=headers)    
 
 
 # 蜂鸣器函数
@@ -73,12 +73,13 @@ def beep_for_5s():
         print(f"蜂鸣失败: {e}")
 
 
-# 以Restful从币安获取15分钟K线数据
-def get_kline(symbol,proxy_cycle,limit=96):
+# 以Restful从币安获取K线数据，interval为K线周期
+def get_kline(symbol,interval,limit,proxy_cycle):
 
     url = f"https://fapi.binance.com/fapi/v1/klines"
-    params = {"symbol": symbol, "interval": "15m", "limit": limit}
+    params = {"symbol": symbol, "interval": interval, "limit": limit}
     return fetch_with_proxy(url, params, proxy_cycle=proxy_cycle)
+
 
 
 
@@ -123,11 +124,11 @@ def check_volume(symbol, proxy_cycle):
     uptrend = query_up_trend(symbol)
     downtrend = query_down_trend(symbol)
 
-    # 读取15分钟K线数据
-    data = get_kline(symbol, proxy_cycle)
+    # 读取15分钟K线最新96根数据
+    data = get_kline(symbol, "15m", 96, proxy_cycle)
 
     if not data:
-        print(f"获取 {symbol} 的K线失败或返回为空")
+        print(f"获取 {symbol} 的15分钟K线失败或返回为空")
         return   
 
     # 开盘价、收盘价、成交量转换数据类型
@@ -145,7 +146,7 @@ def check_volume(symbol, proxy_cycle):
     volume_ma96 = calculate_ma96(volumes)
     # print(f"{symbol}成交量的MA96: {volume_ma96} ")
     if volume_ma96 is None:
-        print(f"⚠️ {symbol} 的K线数据不足96根，跳过计算")
+        print(f"⚠️ {symbol} 的15分钟K线数据不足96根，跳过计算")
         return
 
     # 以收盘价计算价格的MA14
@@ -189,17 +190,37 @@ def check_volume(symbol, proxy_cycle):
         # 顺势的情况，放量倍数可以适当降低要求
         if((uptrend and current_close / price_ma14 < 0.99) or (downtrend and current_close / price_ma14 > 1.01) ) :
             volume_multiple = 2.2
-            factor_multiple = 0.08
+            factor_multiple = 0.08     
+
 
         # 放量价格异动
         if factor >  factor_multiple:
+
+            # 查询放量的5分钟K线，收盘价作为买点，开盘价作为第一止盈点
+            time.sleep(0.5)
+            data = get_kline(symbol, "5m", 3, proxy_cycle)
+            if not data or len(data) < 3:
+                print("❌ {symbol} 的5分钟K线数据不足3根")
+                return        
+            # 找出成交量最大的那根K线
+            max_kline = max(data, key=lambda k: float(k[5]))  # k[5] 是成交量
+            open_price = float(max_kline[1])  # 开盘价
+            close_price = float(max_kline[4])  # 收盘价
+
+            # 默认是多单的情况下，买入价是5分钟放量K线的收盘价和当前收盘价的最低价
+            buy_price = min(close_price, current_close)
+
             order = "多单"
             if(current_close > current_open) :
-                order = "空单"             
+                order = "空单"
+                buy_price = max(close_price, current_close)
+
             # 仓位大小，为量能倍数乘以价格偏离数，量能越大、偏离越大，开的仓位越大
             position = factor * 100 * 100
             number = position / current_close
-            message=f"Lucky:🚨\n {symbol}\n 当前15分钟{volume_times:.1f}倍放量!  价格最大偏离{max_deviation:.1%}！\n 建议开仓{order}数量为{number:.2f}!\n 建议下单价格为5分钟K线最后一根下跌放量收盘价附近。"
+
+
+            message=f"Lucky:🚨\n {symbol}\n 当前15分钟{volume_times:.1f}倍放量!  价格最大偏离{max_deviation:.1%}！\n 建议开仓{order}数量为{number:.2f}!\n 建议下单价格为{buy_price}! \n 第一次止盈价格建议为{open_price}"
             # 电脑屏幕打印日志
             print(message)
             # 通知到手机钉钉
@@ -232,7 +253,7 @@ def schedule_volume_check(proxy_cycle):
 
 # 启动定时任务
 if __name__ == "__main__":
-    proxy_ports = [42010, 42011, 42013, 42012, 42002, 42004]
+    proxy_ports = [42010, 42011, 42013, 42014, 42002, 42004]
     proxy_cycle = cycle(proxy_ports)  # 轮询器
 
     # 初始化日线趋势判断
