@@ -180,7 +180,7 @@ def check_volume(symbol, proxy_cycle):
     # print(f"{symbol}盘中价与MA14的最大偏离: {max_deviation:.1%} ")
 
     # 开盘价与MA14已经有偏离，避免刚从整理平台选择方向的情况
-    if(open_deviation > 0.009) :
+    if(open_deviation > 0.01) :
         # 默认的放量倍数是6倍，逆势操作的高要求
         volume_multiple = 6
         # 成交量放大倍数和MA14价格偏离率的偏移基准，逆势操作的高要求       
@@ -205,19 +205,19 @@ def check_volume(symbol, proxy_cycle):
             # 找出成交量最大的那根K线
             max_kline = max(data, key=lambda k: float(k[5]))  # k[5] 是成交量
             open_price = float(max_kline[1])  # 开盘价
-            close_price = float(max_kline[4])  # 收盘价
-
-            # 默认是多单的情况下，买入价是5分钟放量K线的收盘价和当前收盘价的最低价
-            buy_price = min(close_price, current_close)
+            # 提取每根K线的收盘价（第5个字段，索引4）
+            close_prices = [float(kline[4]) for kline in data]
+            # 默认是多单的情况下，买入价是5分钟K线的收盘价的最低价
+            buy_price = min(close_prices)
 
             order = "多单"
-            if(current_close > current_open) :
+            if(current_close > price_ma14) :
                 order = "空单"
-                buy_price = max(close_price, current_close)
+                buy_price = max(close_prices)
 
             # 仓位大小，为量能倍数乘以价格偏离数，量能越大、偏离越大，开的仓位越大
             position = factor * 100 * 100
-            number = position / current_close
+            number = position / current_close * 2
 
 
             message=f"Lucky:🚨\n {symbol}\n 当前15分钟{volume_times:.1f}倍放量!  价格最大偏离{max_deviation:.1%}！\n 建议开仓{order}数量为{number:.2f}!\n 建议下单价格为{buy_price}! \n 第一次止盈价格建议为{open_price}"
