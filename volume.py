@@ -181,6 +181,11 @@ def check_volume(symbol, proxy_cycle):
 
     # 开盘价与MA14已经有偏离，避免刚从整理平台选择方向的情况
     if(open_deviation > 0.01) :
+
+        if(current_volume < volumes[-2]):
+             print(f"⚠️ {symbol} 本时段成交量比上一时段小，不再重复通知")
+             return
+
         # 默认的放量倍数是6倍，逆势操作的高要求
         volume_multiple = 6
         # 成交量放大倍数和MA14价格偏离率的偏移基准，逆势操作的高要求       
@@ -242,7 +247,7 @@ def schedule_volume_check(proxy_cycle):
             update_trend_dict(proxy_cycle)
 
         # 判断当前时间是否是指定的检查时刻：
-        if now.minute in [14, 29, 44, 59] and now.second == 20:
+        if now.minute in [14, 29, 44, 59] and now.second == 30:
             print(f"⚡ {now.strftime('%H:%M:%S')} 开始检查成交量...")
             for symbol in symbols:
                 # 每个代币取完数休息，避免请求频繁被币安屏蔽
