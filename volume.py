@@ -194,7 +194,7 @@ def check_volume(symbol, proxy_cycle):
 
         # 顺势的情况，放量倍数可以适当降低要求
         if((uptrend and current_close / price_ma14 < 0.99) or (downtrend and current_close / price_ma14 > 1.01) ) :
-            volume_multiple = 2.2
+            volume_multiple = 2.3
             factor_multiple = 0.08     
 
 
