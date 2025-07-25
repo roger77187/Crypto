@@ -182,10 +182,6 @@ def check_volume(symbol, proxy_cycle):
     # 开盘价与MA14已经有偏离，避免刚从整理平台选择方向的情况
     if(open_deviation > 0.01) :
 
-        if(current_volume < volumes[-2]):
-             print(f"⚠️ {symbol} 本时段成交量比上一时段小，不再重复通知")
-             return
-
         # 默认的放量倍数是6倍，逆势操作的高要求
         volume_multiple = 6
         # 成交量放大倍数和MA14价格偏离率的偏移基准，逆势操作的高要求       
@@ -200,6 +196,11 @@ def check_volume(symbol, proxy_cycle):
 
         # 放量价格异动
         if factor >  factor_multiple:
+
+            # 上一个时段已经通知过，就无需重复通知
+            if(current_volume < volumes[-2]):
+                print(f"⚠️ {symbol} 本时段成交量比上一时段小，不再重复通知")
+                return
 
             # 查询放量的5分钟K线，收盘价作为买点，开盘价作为第一止盈点
             time.sleep(0.5)
@@ -225,7 +226,7 @@ def check_volume(symbol, proxy_cycle):
             number = position / current_close * 2
 
 
-            message=f"Lucky:🚨\n {symbol}\n 当前15分钟{volume_times:.1f}倍放量!  价格最大偏离{max_deviation:.1%}！\n 建议开仓{order}数量为{number:.2f}!\n 建议下单价格为{buy_price}! \n 第一次止盈价格建议为{open_price}"
+            message=f"Lucky:🚨\n {symbol}\n 当前15分钟{volume_times:.1f}倍放量!  价格最大偏离{max_deviation:.1%}！\n 建议开仓{order}数量为{number:.2f}!\n 建议下单价格为{buy_price}! "
             # 电脑屏幕打印日志
             print(message)
             # 通知到手机钉钉
