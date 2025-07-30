@@ -1,13 +1,12 @@
 import time
 import requests
-import threading
 import platform
 from datetime import datetime, timedelta
 import pandas as pd
-import winsound
-from utils import fetch_with_proxy
+from utils import get_kline, calculate_recent_average
 from itertools import cycle
 from trend import is_uptrend, is_downtrend
+from notify import notify
 
 # 币种列表
 symbols = ["TIAUSDT", "SUIUSDT", "ARBUSDT", "SOLUSDT", "AAVEUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT",  "ADAUSDT"]
@@ -37,68 +36,6 @@ down_trend_map = {
     "DOGEUSDT": False,
     "ADAUSDT": False
 }
-
-
-# 设置代理（如有）
-proxies = {
-    "http": "http://127.0.0.1:42010",     # 视你的代理工具而定
-    "https": "http://127.0.0.1:42010"
-}
-
-
-# 通知到钉钉的群里面
-def send_dingtalk_msg(content):
-
-    webhook = "https://oapi.dingtalk.com/robot/send?access_token=7cec8580bca47a2ce6296bfc3db372f4d01e4a1db7a7caec472aa00fe16b61c7"    
-
-    msg = {
-        "msgtype": "text",
-        "text": {
-            "content": content
-        }
-    }
-
-    headers = {'Content-Type': 'application/json'}
-    requests.post(webhook, json=msg, headers=headers)    
-
-
-# 蜂鸣器函数
-def beep_for_5s():
-    """持续5秒的蜂鸣声（Windows）"""
-    try:
-        duration = 10000   # 持续10秒（10000毫秒）
-        frequency = 1000  # 1000Hz高频警报音
-        winsound.Beep(frequency, duration)
-    except Exception as e:
-        print(f"蜂鸣失败: {e}")
-
-
-# 以Restful从币安获取K线数据，interval为K线周期
-def get_kline(symbol,interval,limit,proxy_cycle):
-
-    url = f"https://fapi.binance.com/fapi/v1/klines"
-    params = {"symbol": symbol, "interval": interval, "limit": limit}
-    return fetch_with_proxy(url, params, proxy_cycle=proxy_cycle)
-
-
-
-
-# 计算成交量的 MA96
-def calculate_ma96(volumes):
-
-    if len(volumes) < 96:
-        return None
-    return sum(volumes) / 96
-
-
-# 计算成交价的 MA14
-def caculate_ma14(prices):
-    # 只取最后14个收盘价
-    last_14_closes = prices[-14:]
-
-    # 计算 MA14
-    ma14 = sum(last_14_closes) / len(last_14_closes)
-    return ma14
 
 # 更新各代币日线趋势的字典
 def update_trend_dict(proxy_cycle):
@@ -143,14 +80,14 @@ def check_volume(symbol, proxy_cycle):
         return
 
     # 计算成交量的MA96
-    volume_ma96 = calculate_ma96(volumes)
+    volume_ma96 = calculate_recent_average(volumes, 96)
     # print(f"{symbol}成交量的MA96: {volume_ma96} ")
     if volume_ma96 is None:
         print(f"⚠️ {symbol} 的15分钟K线数据不足96根，跳过计算")
         return
 
     # 以收盘价计算价格的MA14
-    price_ma14 = caculate_ma14(closes)
+    price_ma14 = calculate_recent_average(closes, 14)
     # print(f"{symbol}收盘价的MA14: {price_ma14} ")
 
     # 获取当前15分钟K线的成交量（即该15分钟K线的部分成交量）
@@ -182,16 +119,21 @@ def check_volume(symbol, proxy_cycle):
     # 开盘价与MA14已经有偏离，避免刚从整理平台选择方向的情况
     if(open_deviation > 0.01) :
 
-        # 默认的放量倍数是6倍，逆势操作的高要求
-        volume_multiple = 6
-        # 成交量放大倍数和MA14价格偏离率的偏移基准，逆势操作的高要求       
-        factor_multiple = 0.23
+        # 价格趋势未明的情况下，默认的放量倍数是4.5倍
+        volume_multiple = 4.5
+        # 成交量放大倍数和MA14价格偏离率的偏移基准   
+        factor_multiple = 0.16
         factor = volume_times * max_deviation
 
-        # 顺势的情况，放量倍数可以适当降低要求
+        # 逆势的情况，逆势操作的高要求
+        if((uptrend and current_close / price_ma14 >1.01) or (downtrend and current_close / price_ma14 < 0.99)):
+            volume_multiple = 6
+            factor_multiple = 0.23
+
+        # 顺势的情况，顺势操作可以降低要求
         if((uptrend and current_close / price_ma14 < 0.99) or (downtrend and current_close / price_ma14 > 1.01) ) :
             volume_multiple = 2.3
-            factor_multiple = 0.08     
+            factor_multiple = 0.08
 
 
         # 放量价格异动
@@ -225,14 +167,8 @@ def check_volume(symbol, proxy_cycle):
             position = factor * 100 * 100
             number = position / current_close * 2
 
-
-            message=f"Lucky:🚨\n {symbol}\n 当前15分钟{volume_times:.1f}倍放量!  价格最大偏离{max_deviation:.1%}！\n 建议开仓{order}数量为{number:.2f}!\n 建议下单价格为{buy_price}! "
-            # 电脑屏幕打印日志
-            print(message)
-            # 通知到手机钉钉
-            send_dingtalk_msg(message)
-            # 电脑声音告警
-            threading.Thread(target=beep_for_5s).start() 
+            content=f"{symbol}\n 当前15分钟{volume_times:.1f}倍放量!  价格最大偏离{max_deviation:.1%}！\n 建议开仓{order}数量为{number:.2f}!\n 建议下单价格为{buy_price}! "
+            notify(content)
 
 
 
@@ -265,7 +201,7 @@ if __name__ == "__main__":
     # 初始化日线趋势判断
     update_trend_dict(proxy_cycle)
     
-    print(f"定时程序已经启动...请勿关闭窗口！")
+    print(f"异常放量的定时程序已经启动...请勿关闭窗口！")
     schedule_volume_check(proxy_cycle)  
     #for symbol in symbols:
     #    check_volume(symbol, proxy_cycle)
