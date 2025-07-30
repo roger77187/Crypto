@@ -83,7 +83,7 @@ if __name__ == "__main__":
     # 模拟代理循环器
     proxy_ports = [42010, 42011, 42012]
     proxy_cycle = cycle(proxy_ports)
-    symbols = ["BTCUSDT", "ETHUSDT"]
+    symbols = ["BTCUSDT", "ETHUSDT", "AAVEUSDT"]
     for sym in symbols:
         is_uptrend(sym, proxy_cycle)
         is_downtrend(sym, proxy_cycle)
