@@ -5,45 +5,33 @@ from datetime import datetime, timedelta
 import pandas as pd
 from utils import get_kline, calculate_recent_average
 from itertools import cycle
-from trend import is_uptrend, is_downtrend
+from trend import trend
 from notify import notify
 
 # 币种列表
-symbols = ["TIAUSDT", "SUIUSDT", "ARBUSDT", "SOLUSDT", "AAVEUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT",  "ADAUSDT"]
+symbols = ["TIAUSDT", "SUIUSDT", "ARBUSDT", "UNIUSDT" , "AAVEUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT", "LINKUSDT" , "ADAUSDT" , "ZECUSDT"]
 
 # 各代币是否上升趋势的字典
-up_trend_map = {
-    "TIAUSDT": False,
-    "SUIUSDT": False,
-    "ARBUSDT": False,
-    "SOLUSDT": False,
-    "AAVEUSDT": False,
-    "XRPUSDT": False,
-    "LTCUSDT": False,
-    "DOGEUSDT": False,
-    "ADAUSDT": False
-}
+up_trend_map = {}
 
 # 各代币是否上升趋势的字典
-down_trend_map = {
-    "TIAUSDT": False,
-    "SUIUSDT": False,
-    "ARBUSDT": False,
-    "SOLUSDT": False,
-    "AAVEUSDT": False,
-    "XRPUSDT": False,
-    "LTCUSDT": False,
-    "DOGEUSDT": False,
-    "ADAUSDT": False
-}
+down_trend_map = {}
 
 # 更新各代币日线趋势的字典
 def update_trend_dict(proxy_cycle):
+    # 先初始化为False
+    up_trend_map = {symbol: False for symbol in symbols}
+    down_trend_map = {symbol: False for symbol in symbols}
     for symbol in symbols:
-        # 查询日线K线数据，判断代币是否处于上升趋势或者下降趋势
-        up_trend_map[symbol] = is_uptrend(symbol, proxy_cycle)
-        time.sleep(0.5)
-        down_trend_map[symbol] = is_downtrend(symbol, proxy_cycle)
+        result = trend(symbol, proxy_cycle)
+        if result == 1:
+            print(f"📈 {symbol} 上升趋势")
+            up_trend_map[symbol] = True
+        elif result == -1:
+            print(f"📉 {symbol} 下降趋势")
+            down_trend_map[symbol] = True
+        else:
+            print(f"➖ {symbol} 趋势不明")
         time.sleep(0.5)
     
 # 判断日线是否处于上升趋势
@@ -122,18 +110,22 @@ def check_volume(symbol, proxy_cycle):
         # 价格趋势未明的情况下，默认的放量倍数是4.5倍
         volume_multiple = 4.5
         # 成交量放大倍数和MA14价格偏离率的偏移基准   
-        factor_multiple = 0.16
+        factor_multiple = 0.15
         factor = volume_times * max_deviation
+        # 仓位大小，为量能倍数乘以价格偏离数，量能越大、偏离越大，开的仓位越大
+        position = factor * 100 * 150
 
         # 逆势的情况，逆势操作的高要求
         if((uptrend and current_close / price_ma14 >1.01) or (downtrend and current_close / price_ma14 < 0.99)):
             volume_multiple = 6
             factor_multiple = 0.23
+            position = factor * 100 * 100
 
         # 顺势的情况，顺势操作可以降低要求
         if((uptrend and current_close / price_ma14 < 0.99) or (downtrend and current_close / price_ma14 > 1.01) ) :
             volume_multiple = 2.3
             factor_multiple = 0.08
+            position = factor * 100 * 200
 
 
         # 放量价格异动
@@ -163,9 +155,7 @@ def check_volume(symbol, proxy_cycle):
                 order = "空单"
                 buy_price = max(close_prices)
 
-            # 仓位大小，为量能倍数乘以价格偏离数，量能越大、偏离越大，开的仓位越大
-            position = factor * 100 * 100
-            number = position / current_close * 2
+            number = position / current_close
 
             content=f"{symbol}\n 当前15分钟{volume_times:.1f}倍放量!  价格最大偏离{max_deviation:.1%}！\n 建议开仓{order}数量为{number:.2f}!\n 建议下单价格为{buy_price}! "
             notify(content)
@@ -178,8 +168,8 @@ def schedule_volume_check(proxy_cycle):
     while True:
         now = datetime.now()
 
-        # 每隔一小时更新一下K线日线趋势
-        if now.minute == 8 and  now.second == 30:
+        # 每隔15分钟更新一下K线日线趋势
+        if now.minute in [10, 25, 40, 55] and now.second == 30:
             print(f"⚡ {now.strftime('%H:%M:%S')} 更新日线趋势判断...")
             update_trend_dict(proxy_cycle)
 
