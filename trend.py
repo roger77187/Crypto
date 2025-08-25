@@ -49,6 +49,6 @@ if __name__ == "__main__":
         if result == 1:
             print(f"📈 {sym} 处于上升趋势")
         elif result == -1:
-            print(f"🔻 {sym} 处于下降趋势")
+            print(f"📉 {sym} 处于下降趋势")
         else:
-            print(f"{sym} 趋势不明")
+            print(f"➖{sym} 趋势不明")
