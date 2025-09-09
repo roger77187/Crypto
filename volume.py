@@ -9,7 +9,7 @@ from trend import trend
 from notify import notify
 
 # 币种列表
-symbols = ["TIAUSDT", "SUIUSDT", "ARBUSDT", "UNIUSDT" , "AAVEUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT", "LINKUSDT" , "ADAUSDT" , "ZECUSDT"]
+symbols = ["HYPEUSDT", "SUIUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT", "LINKUSDT" , "ADAUSDT", "ENAUSDT" , "TIAUSDT", "ARBUSDT", "UNIUSDT" , "AAVEUSDT"]
 
 # 各代币是否上升趋势的字典
 up_trend_map = {}
