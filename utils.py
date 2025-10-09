@@ -42,7 +42,7 @@ def fetch_with_proxy(url, params=None, retries=3, timeout=3, proxy_cycle=None):
     return None
 
 
-# 以Restful从币安获取K线数据，interval为K线周期
+# 以Restful从币安获取合约的K线数据，interval为K线周期
 def get_kline(symbol,interval,limit,proxy_cycle):
     url = f"https://fapi.binance.com/fapi/v1/klines"
     params = {"symbol": symbol, "interval": interval, "limit": limit}
