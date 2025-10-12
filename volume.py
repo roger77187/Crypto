@@ -6,10 +6,12 @@ import pandas as pd
 from utils import get_kline, calculate_recent_average
 from itertools import cycle
 from trend import trend
-from notify import notify
+from notify import dingtalk_notify
 
 # 币种列表
-symbols = ["HYPEUSDT", "SUIUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT", "LINKUSDT" , "ADAUSDT", "ENAUSDT" , "TIAUSDT", "ARBUSDT", "UNIUSDT" , "AAVEUSDT"]
+symbols = ["ETHUSDT", "HYPEUSDT", "SUIUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT", "LINKUSDT" , "ADAUSDT" , "WLFIUSDT", "SOLUSDT"]
+
+webhook = "https://oapi.dingtalk.com/robot/send?access_token=7cec8580bca47a2ce6296bfc3db372f4d01e4a1db7a7caec472aa00fe16b61c7"
 
 # 各代币是否上升趋势的字典
 up_trend_map = {}
@@ -19,6 +21,8 @@ down_trend_map = {}
 
 # 更新各代币日线趋势的字典
 def update_trend_dict(proxy_cycle):
+    global up_trend_map
+    global down_trend_map
     # 先初始化为False
     up_trend_map = {symbol: False for symbol in symbols}
     down_trend_map = {symbol: False for symbol in symbols}
@@ -33,7 +37,10 @@ def update_trend_dict(proxy_cycle):
         else:
             print(f"➖ {symbol} 趋势不明")
         time.sleep(0.5)
-    
+    # print(up_trend_map)
+    # print(down_trend_map)
+
+
 # 判断日线是否处于上升趋势
 def query_up_trend(symbol):
     return up_trend_map.get(symbol, False)  # 如果不存在，返回默认 False
@@ -46,8 +53,9 @@ def query_down_trend(symbol):
 def check_volume(symbol, proxy_cycle):
 
     # 查询日线K线数据，判断代币是否处于上升趋势或者下降趋势
-    uptrend = query_up_trend(symbol)
-    downtrend = query_down_trend(symbol)
+    uptrend = up_trend_map[symbol]
+    downtrend = down_trend_map[symbol]
+    # print(f"{symbol}上升趋势: {uptrend}，下降趋势:{downtrend} ")
 
     # 读取15分钟K线最新96根数据
     data = get_kline(symbol, "15m", 96, proxy_cycle)
@@ -62,7 +70,6 @@ def check_volume(symbol, proxy_cycle):
     lows = [float(k[3]) for k in data]    # 第4列是 最低价
     closes = [float(k[4]) for k in data]  # 第5列是 收盘价
     volumes = [float(k[5]) for k in data]  # 取成交量（K线的第6个字段）
-
 
     if not volumes:
         return
@@ -101,36 +108,38 @@ def check_volume(symbol, proxy_cycle):
         open_deviation = (current_open - price_ma14) / price_ma14
         max_deviation = (current_high - price_ma14) / price_ma14
 
+    factor = volume_times * max_deviation
     # print(f"{symbol}开盘价与MA14的偏离: {open_deviation:.1%} ")
     # print(f"{symbol}盘中价与MA14的最大偏离: {max_deviation:.1%} ")
+    # 价格趋势未明的情况下，默认的放量倍数是4.5倍
+    volume_multiple = 4.5
+    # 15分钟K线开盘价偏离MA14的基准，价格趋势未明的情况下默认偏离1.5%
+    price_deviation = 0.015
+    # 成交量放大倍数和MA14价格偏离率的偏移基准   
+    factor_multiple = 0.15
+    # 仓位大小，为量能倍数乘以价格偏离数，量能越大、偏离越大，开的仓位越大
+    position = factor * 100 * 150
+
+    # 逆势的情况，逆势操作的高要求
+    if((uptrend and current_open > price_ma14 ) or (downtrend and current_open < price_ma14)):
+        factor_multiple = 0.23
+        volume_multiple = 6.5
+        position = factor * 100 * 100
+        price_deviation = 0.02
+        # print(f"❌ {symbol} 逆势指标，放量倍数基准{volume_multiple:.1f}，开盘价偏离基准{price_deviation:.3f}")
+
+    # 顺势的情况，顺势操作可以降低要求
+    if((uptrend and current_close < price_ma14) or (downtrend and current_close >  price_ma14) ) :
+        factor_multiple = 0.08        
+        volume_multiple = 2.3
+        position = factor * 100 * 200
+        price_deviation = 0.01
+        # print(f"✅ {symbol} 顺势指标，放量倍数基准{volume_multiple:.1f}，开盘价偏离基准{price_deviation:.3f}") 
 
     # 开盘价与MA14已经有偏离，避免刚从整理平台选择方向的情况
-    if(open_deviation > 0.01) :
-
-        # 价格趋势未明的情况下，默认的放量倍数是4.5倍
-        volume_multiple = 4.5
-        # 成交量放大倍数和MA14价格偏离率的偏移基准   
-        factor_multiple = 0.15
-        factor = volume_times * max_deviation
-        # 仓位大小，为量能倍数乘以价格偏离数，量能越大、偏离越大，开的仓位越大
-        position = factor * 100 * 150
-
-        # 逆势的情况，逆势操作的高要求
-        if((uptrend and current_close / price_ma14 >1.01) or (downtrend and current_close / price_ma14 < 0.99)):
-            volume_multiple = 6
-            factor_multiple = 0.23
-            position = factor * 100 * 100
-
-        # 顺势的情况，顺势操作可以降低要求
-        if((uptrend and current_close / price_ma14 < 0.99) or (downtrend and current_close / price_ma14 > 1.01) ) :
-            volume_multiple = 2.3
-            factor_multiple = 0.08
-            position = factor * 100 * 200
-
-
+    if(open_deviation > price_deviation) :
         # 放量价格异动
-        if factor >  factor_multiple:
-
+        if volume_times >  volume_multiple:
             # 上一个时段已经通知过，就无需重复通知
             if(current_volume < volumes[-2]):
                 print(f"⚠️ {symbol} 本时段成交量比上一时段小，不再重复通知")
@@ -141,7 +150,7 @@ def check_volume(symbol, proxy_cycle):
             data = get_kline(symbol, "5m", 3, proxy_cycle)
             if not data or len(data) < 3:
                 print("❌ {symbol} 的5分钟K线数据不足3根")
-                return        
+                return
             # 找出成交量最大的那根K线
             max_kline = max(data, key=lambda k: float(k[5]))  # k[5] 是成交量
             open_price = float(max_kline[1])  # 开盘价
@@ -151,14 +160,14 @@ def check_volume(symbol, proxy_cycle):
             buy_price = min(close_prices)
 
             order = "多单"
-            if(current_close > price_ma14) :
+            if(current_open > price_ma14) :
                 order = "空单"
                 buy_price = max(close_prices)
 
             number = position / current_close
 
-            content=f"{symbol}\n 当前15分钟{volume_times:.1f}倍放量!  价格最大偏离{max_deviation:.1%}！\n 建议开仓{order}数量为{number:.2f}!\n 建议下单价格为{buy_price}! "
-            notify(content)
+            content=f"Lucky:🚨\n{symbol}\n 当前15分钟{volume_times:.1f}倍放量!  价格最大偏离{max_deviation:.1%}！\n 建议开仓{order}数量为{number:.2f}!\n 参考下单价格为{buy_price}! "
+            dingtalk_notify(webhook, content)
 
 
 
@@ -185,7 +194,7 @@ def schedule_volume_check(proxy_cycle):
 
 # 启动定时任务
 if __name__ == "__main__":
-    proxy_ports = [42010, 42011, 42013, 42014, 42002, 42004]
+    proxy_ports = [42011, 42012, 42013, 42014, 42002, 42003, 42004, 42021, 42022]
     proxy_cycle = cycle(proxy_ports)  # 轮询器
 
     # 初始化日线趋势判断
@@ -193,5 +202,5 @@ if __name__ == "__main__":
     
     print(f"异常放量的定时程序已经启动...请勿关闭窗口！")
     schedule_volume_check(proxy_cycle)  
-    #for symbol in symbols:
+    # for symbol in symbols:
     #    check_volume(symbol, proxy_cycle)
