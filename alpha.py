@@ -13,24 +13,24 @@ import threading
 # 币种列表   https://www.binance.com/bapi/defi/v1/public/wallet-direct/buw/wallet/cex/alpha/all/token/list
 alpha_map = {
     "ALPHA_382": "AOP",
-    "ALPHA_373": "ALEO",
-    "ALPHA_417": "SLX",
-    "ALPHA_372": "ZEUS",
-    "ALPHA_387": "NUMI",  
+    "ALPHA_387": "NUMI",
+    "ALPHA_432": "RECALL",     
+    "ALPHA_428": "LAB",     
+    "ALPHA_429": "CLO",    
+    "ALPHA_423": "CDL",     
     "ALPHA_409": "EVAA",
     "ALPHA_408": "P",
     "ALPHA_386": "FROGGIE",
-    "ALPHA_391": "COAI",
-    "ALPHA_414": "KGEN",       
+    "ALPHA_391": "COAI",      
     "ALPHA_394": "HANA", 
-    "ALPHA_376": "STBL",
     "ALPHA_415": "KLINK",
-    "ALPHA_406": "BTG",                          
+    "ALPHA_381": "RIVER", 
+    "ALPHA_401": "VFY",                              
     "ALPHA_396": "LIGHT"
 }
 
 # 钉钉群通知机器人的API地址
-webhook = "https://oapi.dingtalk.com/robot/send?access_token=9b5b1c9243908146f4ef9db29de49ef08683ab11031d00476d28a98d403feca7"
+webhook = "https://oapi.dingtalk.com/robot/send?access_token=75b8fc4ce4e1e72a378175408c026243f0a554f2033c6148c942346ef2cb1cb0"
 # 只取最近3根K线
 klines_limit = 3
 # 初始化字典，key是代币名，value是上一次告警时间
@@ -92,6 +92,7 @@ def higher_volatility(alphaId,proxy_cycle):
             content=f"❌Alpha：\n {now.strftime('%H:%M:%S')} \n {name}  波动加大!!!!!!"
             # 钉钉群通知
             dingtalk_notify(webhook, content)
+            # print(content)
             # 设置为可以重新再发出可刷告警
             last_alert_time[alphaId] = None
             break  # 退出循环，线程自动结束
@@ -148,6 +149,7 @@ def check_price(alphaId, proxy_cycle):
                 content=f"✅Alpha：\n {now.strftime('%H:%M:%S')} \n {name}  暂时平稳......"
                 # 钉钉群通知
                 dingtalk_notify(webhook, content)
+                # print(content)
                 # 更新告警时间
                 last_alert_time[alphaId] = now
                 # 创建并启动线程，用来监控提醒刷单的代币的波动，传参数用 args=(..., ...)
