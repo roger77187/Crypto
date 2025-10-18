@@ -8,7 +8,7 @@ from notify import dingtalk_notify
 # 币种列表
 symbols = ["ETHUSDT", "HYPEUSDT", "SUIUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT", "LINKUSDT" , "ADAUSDT" , "WLFIUSDT", "SOLUSDT"]
 
-webhook = "https://oapi.dingtalk.com/robot/send?access_token=7cec8580bca47a2ce6296bfc3db372f4d01e4a1db7a7caec472aa00fe16b61c7"
+webhook = "https://oapi.dingtalk.com/robot/send?access_token=8a618559bef6178849439433ef9fe1e9a77a60eec9b45716acf18a1b6d4f8c05"
 
 # 查询并处理各币种的成交量
 def check_volume(symbol, proxy_cycle):
