@@ -6,7 +6,7 @@ from itertools import cycle
 from notify import dingtalk_notify
 
 # 币种列表
-symbols = ["ETHUSDT", "HYPEUSDT", "SUIUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT", "LINKUSDT" , "ADAUSDT" , "WLFIUSDT", "SOLUSDT"]
+symbols = ["ETHUSDT", "HYPEUSDT", "SUIUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT", "LINKUSDT" , "ADAUSDT" , "WLFIUSDT", "SOLUSDT", "BNBUSDT", "BTCUSDT"]
 
 webhook = "https://oapi.dingtalk.com/robot/send?access_token=8a618559bef6178849439433ef9fe1e9a77a60eec9b45716acf18a1b6d4f8c05"
 
@@ -27,9 +27,10 @@ def check_volume(symbol, proxy_cycle):
     # print(f"{symbol} 最近一根4H成交量: {last_volume}")
     # print(f"{symbol} 上一个4H成交量: {prev_volume}")
     # print(f"{symbol} 成交量MA14: {ma14:.2f}")
-    if(last_volume < 0.5 * ma14 and last_volume < 0.5 * prev_volume):
+    # 显著缩量的情况，缩量意味着趋势的延续
+    if(last_volume < 0.5 * ma14 and last_volume < 0.7 * prev_volume):
         now = datetime.now()
-        content=f"Lucky:🚨\n {now.strftime('%H:%M:%S')} \n {symbol}最近4小时K线显著缩量！！！" 
+        content=f"Lucky:🚨\n {now.strftime('%Y-%m-%d %H:%M:%S')} \n {symbol}最近4小时K线显著缩量！！！" 
         dingtalk_notify(webhook, content)
 
 
@@ -40,7 +41,7 @@ def schedule_volume_check(proxy_cycle):
         now = datetime.now()
         # 每隔4小时运行：
         if now.hour in [0, 4, 8, 12, 16, 20,] and now.minute == 3 and now.second == 1:
-            print(f"⚡ {now.strftime('%H:%M:%S')} 开始检查前面4个小时的成交量...")
+            print(f"⚡ {now.strftime('%Y-%m-%d %H:%M:%S')} 开始检查前面4个小时的成交量...")
             for symbol in symbols:
                 # 每个代币取完数休息，避免请求频繁被币安屏蔽
                 time.sleep(1)
