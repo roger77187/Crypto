@@ -12,21 +12,22 @@ import threading
 
 # 币种列表   https://www.binance.com/bapi/defi/v1/public/wallet-direct/buw/wallet/cex/alpha/all/token/list
 alpha_map = {
-    "ALPHA_382": "AOP",
-    "ALPHA_387": "NUMI",
+    "ALPHA_162": "B2",    
+    "ALPHA_443": "AT",     
+    "ALPHA_444": "ON",    
+    "ALPHA_441": "MET", 
+    "ALPHA_442": "APR",         
+    "ALPHA_438": "BLUAI", 
+    "ALPHA_433": "ANOME",    
+    "ALPHA_195": "MERL",
     "ALPHA_432": "RECALL",     
     "ALPHA_428": "LAB",     
     "ALPHA_429": "CLO",    
-    "ALPHA_423": "CDL",     
+    "ALPHA_423": "CDL", 
+    "ALPHA_417": "SLX",        
     "ALPHA_409": "EVAA",
     "ALPHA_408": "P",
-    "ALPHA_386": "FROGGIE",
-    "ALPHA_391": "COAI",      
-    "ALPHA_394": "HANA", 
-    "ALPHA_415": "KLINK",
-    "ALPHA_381": "RIVER", 
-    "ALPHA_401": "VFY",                              
-    "ALPHA_396": "LIGHT"
+    "ALPHA_406": "BTG"
 }
 
 # 钉钉群通知机器人的API地址
@@ -170,7 +171,7 @@ def schedule_price_check(proxy_cycle):
 
 # 启动定时任务
 if __name__ == "__main__":
-    proxy_ports = [42011, 42012, 42013, 42014, 42002, 42003, 42004, 42021, 42022]
+    proxy_ports = [42011, 42012, 42013, 42014, 42002, 42003, 42004, 42021, 42002, 42003, 42004]
     proxy_cycle = cycle(proxy_ports)  # 轮询器
     print(f"Alpha代币价格平稳监测程序已经启动...请勿关闭窗口！")
     schedule_price_check(proxy_cycle)
