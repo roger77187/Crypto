@@ -9,7 +9,7 @@ from trend import trend
 from notify import dingtalk_notify
 
 # 币种列表
-symbols = ["ETHUSDT", "HYPEUSDT", "SUIUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT", "LINKUSDT" , "ADAUSDT" , "WLFIUSDT", "SOLUSDT"]
+symbols = ["ETHUSDT", "HYPEUSDT", "SUIUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT", "LINKUSDT" , "ADAUSDT" , "WLFIUSDT", "SOLUSDT", "BNBUSDT", "LINEAUSDT"]
 
 webhook = "https://oapi.dingtalk.com/robot/send?access_token=8a618559bef6178849439433ef9fe1e9a77a60eec9b45716acf18a1b6d4f8c05"
 
@@ -52,6 +52,8 @@ def query_down_trend(symbol):
 # 查询并处理各币种的成交量
 def check_volume(symbol, proxy_cycle):
 
+    # 当前时间
+    now = datetime.now()
     # 查询日线K线数据，判断代币是否处于上升趋势或者下降趋势
     uptrend = up_trend_map[symbol]
     downtrend = down_trend_map[symbol]
@@ -92,6 +94,7 @@ def check_volume(symbol, proxy_cycle):
     current_low = lows[-1]
     current_high = highs[-1]
 
+
     # 开盘价相对MA14的偏离率
     open_deviation = 0
     # 盘中价相对MA14的最大偏离率
@@ -108,33 +111,39 @@ def check_volume(symbol, proxy_cycle):
         open_deviation = (current_open - price_ma14) / price_ma14
         max_deviation = (current_high - price_ma14) / price_ma14
 
+    # 15分钟K线涨幅超过10%,异常涨幅
+    if(max_deviation > 0.1):
+        content=f"Lucky:🚨\n {now.strftime('%H:%M:%S')}\n{symbol}\n 当前15分钟价格最大偏离{max_deviation:.1%}！\n"
+        dingtalk_notify(webhook, content)
+
     factor = volume_times * max_deviation
     # print(f"{symbol}开盘价与MA14的偏离: {open_deviation:.1%} ")
     # print(f"{symbol}盘中价与MA14的最大偏离: {max_deviation:.1%} ")
-    # 价格趋势未明的情况下，默认的放量倍数是4.5倍
-    volume_multiple = 4.5
+    # 价格趋势未明的情况下，默认的放量倍数是6倍
+    volume_multiple = 6
     # 15分钟K线开盘价偏离MA14的基准，价格趋势未明的情况下默认偏离1.5%
     price_deviation = 0.015
-    # 成交量放大倍数和MA14价格偏离率的偏移基准   
-    factor_multiple = 0.15
     # 仓位大小，为量能倍数乘以价格偏离数，量能越大、偏离越大，开的仓位越大
     position = factor * 100 * 150
 
-    # 逆势的情况，逆势操作的高要求
+    # 逆势的情况，逆势操作的高要求      上涨趋势，涨幅过快或者下跌趋势，下跌过快
     if((uptrend and current_open > price_ma14 ) or (downtrend and current_open < price_ma14)):
-        factor_multiple = 0.23
-        volume_multiple = 6.5
+        volume_multiple = 8
         position = factor * 100 * 100
         price_deviation = 0.02
         # print(f"❌ {symbol} 逆势指标，放量倍数基准{volume_multiple:.1f}，开盘价偏离基准{price_deviation:.3f}")
 
-    # 顺势的情况，顺势操作可以降低要求
-    if((uptrend and current_close < price_ma14) or (downtrend and current_close >  price_ma14) ) :
-        factor_multiple = 0.08        
+    # 顺势的情况，顺势操作可以降低要求     上涨趋势的回调或者下跌趋势的反弹
+    if((uptrend and current_open < price_ma14) or (downtrend and current_open >  price_ma14) ) :
+        # 顺势的放量可以小一点        
         volume_multiple = 2.3
         position = factor * 100 * 200
-        price_deviation = 0.01
+        price_deviation = 0.008
         # print(f"✅ {symbol} 顺势指标，放量倍数基准{volume_multiple:.1f}，开盘价偏离基准{price_deviation:.3f}") 
+
+    
+ 
+
 
     # 开盘价与MA14已经有偏离，避免刚从整理平台选择方向的情况
     if(open_deviation > price_deviation) :
@@ -165,8 +174,8 @@ def check_volume(symbol, proxy_cycle):
                 buy_price = max(close_prices)
 
             number = position / current_close
-
-            content=f"Lucky:🚨\n{symbol}\n 当前15分钟{volume_times:.1f}倍放量!  价格最大偏离{max_deviation:.1%}！\n 建议开仓{order}数量为{number:.2f}!\n 参考下单价格为{buy_price}! "
+            
+            content=f"Lucky:🚨\n {now.strftime('%H:%M:%S')}\n{symbol}\n 当前15分钟{volume_times:.1f}倍放量!  价格最大偏离{max_deviation:.1%}！\n 建议开仓{order}数量为{number:.2f}!\n 参考下单价格为{buy_price}! "
             dingtalk_notify(webhook, content)
 
 
@@ -179,12 +188,12 @@ def schedule_volume_check(proxy_cycle):
 
         # 每隔15分钟更新一下K线日线趋势
         if now.minute in [10, 25, 40, 55] and now.second == 30:
-            print(f"⚡ {now.strftime('%H:%M:%S')} 更新日线趋势判断...")
+            print(f"⚡ {now.strftime('%Y-%m-%d %H:%M:%S')} 更新日线趋势判断...")
             update_trend_dict(proxy_cycle)
 
         # 判断当前时间是否是指定的检查时刻：
         if now.minute in [14, 29, 44, 59] and now.second == 30:
-            print(f"⚡ {now.strftime('%H:%M:%S')} 开始检查成交量...")
+            print(f"⚡ {now.strftime('%Y-%m-%d %H:%M:%S')} 开始检查成交量...")
             for symbol in symbols:
                 # 每个代币取完数休息，避免请求频繁被币安屏蔽
                 time.sleep(1)
