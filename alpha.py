@@ -12,28 +12,24 @@ import threading
 
 # 币种列表   https://www.binance.com/bapi/defi/v1/public/wallet-direct/buw/wallet/cex/alpha/all/token/list
 alpha_map = {
+    "ALPHA_451": "BEAT",     
+    "ALPHA_452": "BAY",    
+    "ALPHA_450": "NB",    
+    "ALPHA_448": "PIGGY",        
     "ALPHA_162": "B2",    
-    "ALPHA_443": "AT",     
-    "ALPHA_444": "ON",    
+    "ALPHA_443": "AT",  
     "ALPHA_441": "MET", 
     "ALPHA_442": "APR",         
     "ALPHA_438": "BLUAI", 
     "ALPHA_433": "ANOME",    
-    "ALPHA_195": "MERL",
-    "ALPHA_432": "RECALL",     
-    "ALPHA_428": "LAB",     
-    "ALPHA_429": "CLO",    
-    "ALPHA_423": "CDL", 
-    "ALPHA_417": "SLX",        
-    "ALPHA_409": "EVAA",
-    "ALPHA_408": "P",
-    "ALPHA_406": "BTG"
+    "ALPHA_195": "MERL",    
+    "ALPHA_428": "LAB", 
 }
 
 # 钉钉群通知机器人的API地址
 webhook = "https://oapi.dingtalk.com/robot/send?access_token=75b8fc4ce4e1e72a378175408c026243f0a554f2033c6148c942346ef2cb1cb0"
-# 只取最近3根K线
-klines_limit = 3
+# 只取最近2根K线
+klines_limit = 2
 # 初始化字典，key是代币名，value是上一次告警时间
 last_alert_time = {}
 
@@ -48,7 +44,7 @@ def isFlat(alphaId,proxy_cycle,max_volatility):
     url = f"https://www.binance.com/bapi/defi/v1/public/alpha-trade/agg-trades"
     params = {
         "symbol": alphaId + "USDT",
-        "limit": 40         
+        "limit": 80         
     }
     data = fetch_with_proxy(url, params, proxy_cycle=proxy_cycle)
 
@@ -90,14 +86,15 @@ def higher_volatility(alphaId,proxy_cycle):
             now = datetime.now()
             # 代币名称
             name = alpha_map.get(alphaId)            
-            content=f"❌Alpha：\n {now.strftime('%H:%M:%S')} \n {name}  波动加大!!!!!!"
+            content=f"❌Alpha：\n {now.strftime('%H:%M:%S')} \n **{name}**  波动加大!!!!!!"
             # 钉钉群通知
             dingtalk_notify(webhook, content)
             # print(content)
             # 设置为可以重新再发出可刷告警
             last_alert_time[alphaId] = None
             break  # 退出循环，线程自动结束
-        time_module.sleep(5)
+        # 轮询间隔时间2秒钟
+        time_module.sleep(2)
 
 
 # 以Restful从币安获取1分钟K线数据
@@ -138,24 +135,24 @@ def check_price(alphaId, proxy_cycle):
     name = alpha_map.get(alphaId)    
     # print("检查代币价格:", name)
     # 1分钟K线是否走势平稳
-    klines = get_alpha_kline(alphaId, proxy_cycle)
-    if(isCandlestickStable(klines)):
-        # 检查成交记录是否价格基本无变化
-        if(isFlat(alphaId, proxy_cycle, 0.01)):
-            # 判断代币是否应该告警，如果10分钟内有报警就无需重复，并更新字典。       
-            now = datetime.now()
-            # 代币的上一次告警时间
-            last_time = last_alert_time.get(alphaId)
-            if last_time is None or (now - last_time) > timedelta(minutes=10):
-                content=f"✅Alpha：\n {now.strftime('%H:%M:%S')} \n {name}  暂时平稳......"
-                # 钉钉群通知
-                dingtalk_notify(webhook, content)
-                # print(content)
-                # 更新告警时间
-                last_alert_time[alphaId] = now
-                # 创建并启动线程，用来监控提醒刷单的代币的波动，传参数用 args=(..., ...)
-                t = threading.Thread(target=higher_volatility, args=(alphaId, proxy_cycle))
-                t.start()
+    # klines = get_alpha_kline(alphaId, proxy_cycle)
+    # if(isCandlestickStable(klines)):
+    # 检查成交记录是否价格基本无变化
+    if(isFlat(alphaId, proxy_cycle, 0.01)):
+        # 判断代币是否应该告警，如果10分钟内有报警就无需重复，并更新字典。       
+        now = datetime.now()
+        # 代币的上一次告警时间
+        last_time = last_alert_time.get(alphaId)
+        if last_time is None or (now - last_time) > timedelta(minutes=10):
+            content=f"✅Alpha：\n {now.strftime('%H:%M:%S')} \n **{name}**  暂时平稳......"
+            # 钉钉群通知
+            dingtalk_notify(webhook, content)
+            # print(content)
+            # 更新告警时间
+            last_alert_time[alphaId] = now
+            # 创建并启动线程，用来监控提醒刷单的代币的波动，传参数用 args=(..., ...)
+            t = threading.Thread(target=higher_volatility, args=(alphaId, proxy_cycle))
+            t.start()
 
 
 # 定时执行任务：每1分钟的特定时刻检查成交量
