@@ -1,8 +1,6 @@
 import time
-import requests
 import platform
 from datetime import datetime, timedelta
-import pandas as pd
 from utils import get_kline, calculate_recent_average
 from itertools import cycle
 from trend import trend
@@ -180,7 +178,30 @@ def check_volume(symbol, proxy_cycle):
 
 
 
-
+# BTC 5分钟K线爆量的监控
+def volume_spike_five_minute(proxy_cycle):
+    # 当前时间
+    now = datetime.now()    
+    # 读取5分钟K线最新96根数据
+    data = get_kline("BTCUSDT", "5m", 96, proxy_cycle)
+    if not data:
+        print(f"获取BTC的5分钟K线失败或返回为空")
+        return
+    volumes = [float(k[5]) for k in data]  # 取成交量（K线的第6个字段）
+    if not volumes:
+        return
+    # 计算成交量的MA96
+    volume_ma96 = calculate_recent_average(volumes, 96)
+    if volume_ma96 is None:
+        print(f"⚠️ BTC的15分钟K线数据不足96根，跳过计算")
+        return
+    # 获取当前5分钟K线的成交量（即该5分钟K线的部分成交量）
+    current_volume = volumes[-1]           
+    # 成交量放大倍数
+    volume_times = current_volume / volume_ma96
+    if(volume_times > 10):
+       content=f"Lucky:🚨    ** BTC **\n {now.strftime('%H:%M:%S')}\n 当前5分钟成交量放大{volume_times:.1%}倍！\n"
+       dingtalk_notify(webhook, content)        
 
 
 
@@ -194,6 +215,11 @@ def schedule_volume_check(proxy_cycle):
         if now.minute in [10, 25, 40, 55] and now.second == 30:
             print(f"⚡ {now.strftime('%Y-%m-%d %H:%M:%S')} 更新日线趋势判断...")
             update_trend_dict(proxy_cycle)
+
+        # 每隔5分钟监测BTC是否有异常放量
+        if now.minute in [4, 9, 14, 19, 24, 29, 34, 39, 44, 49, 54, 59] and now.second == 20:
+            print(f"⚡ {now.strftime('%Y-%m-%d %H:%M:%S')} 监测BTC异常放量...")
+            update_trend_dict(proxy_cycle)            
 
         # 判断当前时间是否是指定的检查时刻：
         if now.minute in [14, 29, 44, 59] and now.second == 30:
