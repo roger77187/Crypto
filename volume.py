@@ -9,7 +9,7 @@ from trend import trend
 from notify import dingtalk_notify
 
 # 币种列表
-symbols = ["ETHUSDT", "HYPEUSDT", "SUIUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT", "LINKUSDT" , "ADAUSDT" , "WLFIUSDT", "SOLUSDT", "BNBUSDT", "LINEAUSDT"]
+symbols = ["ETHUSDT", "HYPEUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT",  "ADAUSDT" , "BTCUSDT", "SOLUSDT", "BNBUSDT"]
 
 webhook = "https://oapi.dingtalk.com/robot/send?access_token=8a618559bef6178849439433ef9fe1e9a77a60eec9b45716acf18a1b6d4f8c05"
 
@@ -83,9 +83,9 @@ def check_volume(symbol, proxy_cycle):
         print(f"⚠️ {symbol} 的15分钟K线数据不足96根，跳过计算")
         return
 
-    # 以收盘价计算价格的MA14
-    price_ma14 = calculate_recent_average(closes, 14)
-    # print(f"{symbol}收盘价的MA14: {price_ma14} ")
+    # 以收盘价计算价格的MA7
+    price_ma7 = calculate_recent_average(closes, 7)
+    # print(f"{symbol}收盘价的MA7: {price_ma7} ")
 
     # 获取当前15分钟K线的成交量（即该15分钟K线的部分成交量）
     current_volume = volumes[-1]
@@ -95,62 +95,60 @@ def check_volume(symbol, proxy_cycle):
     current_high = highs[-1]
 
 
-    # 开盘价相对MA14的偏离率
+    # 开盘价相对MA7的偏离率
     open_deviation = 0
-    # 盘中价相对MA14的最大偏离率
+    # 盘中价相对MA7的最大偏离率
     max_deviation = 0
     # 成交量放大倍数
     volume_times = current_volume / volume_ma96
 
     
-    # 开盘价低于MA14，说明当前15分钟K线处于下跌状态
-    if (current_open < price_ma14):
-        open_deviation = (price_ma14 - current_open) / current_open
-        max_deviation = (price_ma14 - current_low) / current_low
+    # 开盘价低于MA7，说明当前15分钟K线处于下跌状态
+    if (current_open < price_ma7):
+        open_deviation = (price_ma7 - current_open) / current_open
+        max_deviation = (price_ma7 - current_low) / current_low
     else:
-        open_deviation = (current_open - price_ma14) / price_ma14
-        max_deviation = (current_high - price_ma14) / price_ma14
+        open_deviation = (current_open - price_ma7) / price_ma7
+        max_deviation = (current_high - price_ma7) / price_ma7
 
-    # 15分钟K线涨幅超过10%,异常涨幅
-    if(max_deviation > 0.09):
-        content=f"Lucky:🚨    **{symbol}**\n {now.strftime('%H:%M:%S')}\n 当前15分钟价格最大偏离{max_deviation:.1%}！\n"
-        dingtalk_notify(webhook, content)
+    # 15分钟K线涨幅超过5%,异常涨幅
+    # if(max_deviation > 0.06):
+    #    content=f"Lucky:🚨    ** {symbol} **\n {now.strftime('%H:%M:%S')}\n 当前15分钟价格最大偏离{max_deviation:.1%}！\n"
+    #    dingtalk_notify(webhook, content)
 
-    factor = volume_times * max_deviation
-    # print(f"{symbol}开盘价与MA14的偏离: {open_deviation:.1%} ")
-    # print(f"{symbol}盘中价与MA14的最大偏离: {max_deviation:.1%} ")
+    # print(f"{symbol}开盘价与MA7的偏离: {open_deviation:.1%} ")
+    # print(f"{symbol}盘中价与MA7的最大偏离: {max_deviation:.1%} ")
     # 价格趋势未明的情况下，默认的放量倍数是6倍
     volume_multiple = 6
-    # 15分钟K线开盘价偏离MA14的基准，价格趋势未明的情况下默认偏离1.5%
-    price_deviation = 0.015
-    # 仓位大小，为量能倍数乘以价格偏离数，量能越大、偏离越大，开的仓位越大
-    position = factor * 100 * 150
+    # 15分钟K线开盘价偏离MA7的基准，价格趋势未明的情况下默认偏离1%
+    price_deviation = 0.01
+    # 仓位大小，量能越大，代表分歧越大，开的仓位越大
+    position = volume_times * 400
 
     # 逆势的情况，逆势操作的高要求      上涨趋势，涨幅过快或者下跌趋势，下跌过快
-    if((uptrend and current_open > price_ma14 ) or (downtrend and current_open < price_ma14)):
+    if((uptrend and current_open > price_ma7 and current_close > price_ma7) or (downtrend and current_open < price_ma7 and price_ma7 > current_close)):
         volume_multiple = 8
-        position = factor * 100 * 100
-        price_deviation = 0.02
-        # print(f"❌ {symbol} 逆势指标，放量倍数基准{volume_multiple:.1f}，开盘价偏离基准{price_deviation:.3f}")
+        position = volume_times * 200
+        price_deviation = 0.015
 
     # 顺势的情况，顺势操作可以降低要求     上涨趋势的回调或者下跌趋势的反弹
-    if((uptrend and current_open < price_ma14) or (downtrend and current_open >  price_ma14) ) :
-        # 顺势的放量可以小一点        
-        volume_multiple = 2.3
-        position = factor * 100 * 200
-        price_deviation = 0.008
-        # print(f"✅ {symbol} 顺势指标，放量倍数基准{volume_multiple:.1f}，开盘价偏离基准{price_deviation:.3f}") 
+    if((uptrend and current_open < price_ma7 and price_ma7 > current_close) or (downtrend and current_open >  price_ma7 and price_ma7 < current_close) ) :
+        # 顺势的放量可以小一点
+        volume_multiple = 2.2
+        position = volume_times * 800
+        price_deviation = 0.004
 
-    
+
+    print(f"❌ {symbol}，放量倍数基准{volume_multiple:.1f}，开盘价偏离基准{price_deviation:.3f}")
  
 
 
-    # 开盘价与MA14已经有偏离，避免刚从整理平台选择方向的情况
+    # 开盘价与MA7已经有偏离，避免刚从整理平台选择方向的情况
     if(open_deviation > price_deviation) :
         # 放量价格异动
         if volume_times >  volume_multiple:
             # 上一个时段已经通知过，就无需重复通知
-            if(current_volume < volumes[-2]):
+            if(current_volume < volumes[-2] * 0.9):
                 print(f"⚠️ {symbol} 本时段成交量比上一时段小，不再重复通知")
                 return
 
@@ -170,15 +168,19 @@ def check_volume(symbol, proxy_cycle):
             stop_loss = buy_price * 0.98
 
             order = "多单"
-            if(current_open > price_ma14) :
+            if(current_open > price_ma7) :
                 order = "空单"
                 buy_price = max(close_prices)
                 stop_loss = buy_price * 1.02
 
             number = position / current_close
             
-            content=f"Lucky:🚨    **{symbol}**\n {now.strftime('%H:%M:%S')}当前15分钟\n {volume_times:.1f}倍放量!  价格最大偏离{max_deviation:.1%}！\n 建议开仓{order}数量为{number:.2f}!\n 参考下单价格为{buy_price}，止损价格{stop_loss}! "
+            content=f"Lucky:🚨    ** {symbol} **\n {now.strftime('%H:%M:%S')}当前15分钟\n {volume_times:.1f}倍放量!\n 建议开仓{order}数量为{number:.2f}!\n 参考下单价格为{buy_price}，止损价格为{stop_loss:.4f}! "
             dingtalk_notify(webhook, content)
+
+
+
+
 
 
 
