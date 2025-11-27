@@ -6,7 +6,7 @@ from itertools import cycle
 from notify import dingtalk_notify
 
 # 币种列表
-symbols = ["ETHUSDT", "HYPEUSDT", "SUIUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT", "LINKUSDT" , "ADAUSDT" , "WLFIUSDT", "SOLUSDT", "BNBUSDT", "BTCUSDT"]
+symbols = ["ETHUSDT", "HYPEUSDT", "SUIUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT", "LINKUSDT" , "ADAUSDT" , "WLFIUSDT", "SOLUSDT", "BNBUSDT", "BTCUSDT", "AAVEUSDT", "UNIUSDT", "LINEAUSDT"]
 
 webhook = "https://oapi.dingtalk.com/robot/send?access_token=8a618559bef6178849439433ef9fe1e9a77a60eec9b45716acf18a1b6d4f8c05"
 
