@@ -1,6 +1,5 @@
 import time
-import platform
-from datetime import datetime, timedelta
+from datetime import datetime
 from utils import get_kline, calculate_recent_average
 from itertools import cycle
 from trend import trend
@@ -19,6 +18,8 @@ down_trend_map = {}
 
 # 更新各代币日线趋势的字典
 def update_trend_dict(proxy_cycle):
+
+    # 没有声明的话，默认是局部变量
     global up_trend_map
     global down_trend_map
     # 先初始化为False
@@ -35,8 +36,6 @@ def update_trend_dict(proxy_cycle):
         else:
             print(f"➖ {symbol} 趋势不明")
         time.sleep(0.5)
-    # print(up_trend_map)
-    # print(down_trend_map)
 
 
 # 判断日线是否处于上升趋势
@@ -55,7 +54,6 @@ def check_volume(symbol, proxy_cycle):
     # 查询日线K线数据，判断代币是否处于上升趋势或者下降趋势
     uptrend = up_trend_map[symbol]
     downtrend = down_trend_map[symbol]
-    # print(f"{symbol}上升趋势: {uptrend}，下降趋势:{downtrend} ")
 
     # 读取15分钟K线最新96根数据
     data = get_kline(symbol, "15m", 96, proxy_cycle)
@@ -66,8 +64,6 @@ def check_volume(symbol, proxy_cycle):
 
     # 开盘价、收盘价、成交量转换数据类型
     opens = [float(k[1]) for k in data]   # 第2列是 开盘价
-    highs = [float(k[2]) for k in data]   # 第3列是 最高价
-    lows = [float(k[3]) for k in data]    # 第4列是 最低价
     closes = [float(k[4]) for k in data]  # 第5列是 收盘价
     volumes = [float(k[5]) for k in data]  # 取成交量（K线的第6个字段）
 
@@ -76,27 +72,21 @@ def check_volume(symbol, proxy_cycle):
 
     # 计算成交量的MA96
     volume_ma96 = calculate_recent_average(volumes, 96)
-    # print(f"{symbol}成交量的MA96: {volume_ma96} ")
     if volume_ma96 is None:
         print(f"⚠️ {symbol} 的15分钟K线数据不足96根，跳过计算")
         return
 
     # 以收盘价计算价格的MA7
     price_ma7 = calculate_recent_average(closes, 7)
-    # print(f"{symbol}收盘价的MA7: {price_ma7} ")
 
     # 获取当前15分钟K线的成交量（即该15分钟K线的部分成交量）
     current_volume = volumes[-1]
     current_open = opens[-1]
     current_close = closes[-1]
-    current_low = lows[-1]
-    current_high = highs[-1]
 
 
     # 开盘价相对MA7的偏离率
     open_deviation = 0
-    # 盘中价相对MA7的最大偏离率
-    max_deviation = 0
     # 成交量放大倍数
     volume_times = current_volume / volume_ma96
 
@@ -104,22 +94,14 @@ def check_volume(symbol, proxy_cycle):
     # 开盘价低于MA7，说明当前15分钟K线处于下跌状态
     if (current_open < price_ma7):
         open_deviation = (price_ma7 - current_open) / current_open
-        max_deviation = (price_ma7 - current_low) / current_low
     else:
         open_deviation = (current_open - price_ma7) / price_ma7
-        max_deviation = (current_high - price_ma7) / price_ma7
 
-    # 15分钟K线涨幅超过5%,异常涨幅
-    # if(max_deviation > 0.06):
-    #    content=f"Lucky:🚨    ** {symbol} **\n {now.strftime('%H:%M:%S')}\n 当前15分钟价格最大偏离{max_deviation:.1%}！\n"
-    #    dingtalk_notify(webhook, content)
 
-    # print(f"{symbol}开盘价与MA7的偏离: {open_deviation:.1%} ")
-    # print(f"{symbol}盘中价与MA7的最大偏离: {max_deviation:.1%} ")
     # 价格趋势未明的情况下，默认的放量倍数是6倍
     volume_multiple = 6
     # 15分钟K线开盘价偏离MA7的基准，价格趋势未明的情况下默认偏离1%
-    price_deviation = 0.01
+    price_deviation = 0.009
     # 仓位大小，量能越大，代表分歧越大，开的仓位越大
     position = volume_times * 400
 
@@ -134,11 +116,9 @@ def check_volume(symbol, proxy_cycle):
         # 顺势的放量可以小一点
         volume_multiple = 2.2
         position = volume_times * 800
-        price_deviation = 0.004
-
+        price_deviation = 0.003
 
     print(f"❌ {symbol}，放量倍数基准{volume_multiple:.1f}，开盘价偏离基准{price_deviation:.3f}")
- 
 
 
     # 开盘价与MA7已经有偏离，避免刚从整理平台选择方向的情况
@@ -150,30 +130,12 @@ def check_volume(symbol, proxy_cycle):
                 print(f"⚠️ {symbol} 本时段成交量比上一时段小，不再重复通知")
                 return
 
-            # 查询放量的5分钟K线，收盘价作为买点，开盘价作为第一止盈点
-            time.sleep(0.5)
-            data = get_kline(symbol, "5m", 3, proxy_cycle)
-            if not data or len(data) < 3:
-                print("❌ {symbol} 的5分钟K线数据不足3根")
-                return
-            # 找出成交量最大的那根K线
-            max_kline = max(data, key=lambda k: float(k[5]))  # k[5] 是成交量
-            open_price = float(max_kline[1])  # 开盘价
-            # 提取每根K线的收盘价（第5个字段，索引4）
-            close_prices = [float(kline[4]) for kline in data]
-            # 默认是多单的情况下，买入价是5分钟K线的收盘价的最低价
-            buy_price = min(close_prices)
-            stop_loss = buy_price * 0.98
-
             order = "多单"
             if(current_open > price_ma7) :
                 order = "空单"
-                buy_price = max(close_prices)
-                stop_loss = buy_price * 1.02
 
             number = position / current_close
-            
-            content=f"Lucky:🚨    ** {symbol} **\n {now.strftime('%H:%M:%S')}当前15分钟\n {volume_times:.1f}倍放量!\n 建议开仓{order}数量为{number:.2f}!\n 参考下单价格为{buy_price}，止损价格为{stop_loss:.4f}! "
+            content=f"Lucky:🚨    ** {symbol} **\n {now.strftime('%H:%M:%S')}当前15分钟\n {volume_times:.1f}倍放量!\n 建议{order}开仓数量为{number:.2f}!\n"
             dingtalk_notify(webhook, content)
 
 
@@ -201,8 +163,7 @@ def volume_spike_five_minute(proxy_cycle):
     volume_times = current_volume / volume_ma96
     if(volume_times > 10):
        content=f"Lucky:🚨    ** BTC **\n {now.strftime('%H:%M:%S')}\n 当前5分钟成交量放大{volume_times:.1%}倍！\n"
-       dingtalk_notify(webhook, content)        
-
+       dingtalk_notify(webhook, content)
 
 
 # 定时执行任务：每小时的特定时刻检查成交量
@@ -211,24 +172,24 @@ def schedule_volume_check(proxy_cycle):
     while True:
         now = datetime.now()
 
+        # 每隔5分钟监测BTC是否有异常放量
+        if now.minute in [4, 9, 14, 19, 24, 29, 34, 39, 44, 49, 54, 59] and now.second == 25:
+            print(f"⚡ {now.strftime('%Y-%m-%d %H:%M:%S')} 监测BTC异常放量...") 
+
         # 每隔15分钟更新一下K线日线趋势
-        if now.minute in [10, 25, 40, 55] and now.second == 30:
+        if now.minute in [10, 25, 40, 55] and now.second == 55:
             print(f"⚡ {now.strftime('%Y-%m-%d %H:%M:%S')} 更新日线趋势判断...")
             update_trend_dict(proxy_cycle)
-
-        # 每隔5分钟监测BTC是否有异常放量
-        if now.minute in [4, 9, 14, 19, 24, 29, 34, 39, 44, 49, 54, 59] and now.second == 20:
-            print(f"⚡ {now.strftime('%Y-%m-%d %H:%M:%S')} 监测BTC异常放量...")
-            update_trend_dict(proxy_cycle)            
 
         # 判断当前时间是否是指定的检查时刻：
         if now.minute in [14, 29, 44, 59] and now.second == 30:
             print(f"⚡ {now.strftime('%Y-%m-%d %H:%M:%S')} 开始检查成交量...")
             for symbol in symbols:
-                # 每个代币取完数休息，避免请求频繁被币安屏蔽
-                time.sleep(1)
                 check_volume(symbol, proxy_cycle)
-        time.sleep(0.3)  # 每秒检查一次时间
+                # 每个代币取完数休息，避免请求频繁被币安屏蔽
+                time.sleep(0.3)
+        # 完成一系列任务休眠1秒
+        time.sleep(1) 
 
 
 # 启动定时任务
