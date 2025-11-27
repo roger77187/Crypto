@@ -12,18 +12,16 @@ import threading
 
 # 币种列表   https://www.binance.com/bapi/defi/v1/public/wallet-direct/buw/wallet/cex/alpha/all/token/list
 alpha_map = {
+    "ALPHA_476": "KO",    
+    "ALPHA_472": "GAIB",     
+    "ALPHA_471": "DGRAM",    
+    "ALPHA_469": "PIEVERSE",    
+    "ALPHA_465": "TIMI",    
     "ALPHA_451": "BEAT",     
     "ALPHA_452": "BAY",    
-    "ALPHA_450": "NB",    
-    "ALPHA_448": "PIGGY",        
-    "ALPHA_162": "B2",    
-    "ALPHA_443": "AT",  
-    "ALPHA_441": "MET", 
-    "ALPHA_442": "APR",         
-    "ALPHA_438": "BLUAI", 
-    "ALPHA_433": "ANOME",    
-    "ALPHA_195": "MERL",    
-    "ALPHA_428": "LAB", 
+    "ALPHA_450": "NB",
+    "ALPHA_449": "BOS",        
+    "ALPHA_448": "PIGGY"
 }
 
 # 钉钉群通知机器人的API地址
@@ -44,7 +42,7 @@ def isFlat(alphaId,proxy_cycle,max_volatility):
     url = f"https://www.binance.com/bapi/defi/v1/public/alpha-trade/agg-trades"
     params = {
         "symbol": alphaId + "USDT",
-        "limit": 80         
+        "limit": 120         
     }
     data = fetch_with_proxy(url, params, proxy_cycle=proxy_cycle)
 
@@ -93,8 +91,8 @@ def higher_volatility(alphaId,proxy_cycle):
             # 设置为可以重新再发出可刷告警
             last_alert_time[alphaId] = None
             break  # 退出循环，线程自动结束
-        # 轮询间隔时间2秒钟
-        time_module.sleep(2)
+        # 轮询间隔时间1秒钟
+        time_module.sleep(1)
 
 
 # 以Restful从币安获取1分钟K线数据
