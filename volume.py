@@ -6,7 +6,7 @@ from trend import trend
 from notify import dingtalk_notify
 
 # 币种列表
-symbols = ["ETHUSDT", "HYPEUSDT", "XRPUSDT", "LTCUSDT", "DOGEUSDT",  "ADAUSDT" , "BTCUSDT", "SOLUSDT", "BNBUSDT"]
+symbols = ["ETHUSDT", "LTCUSDT", "BTCUSDT", "SOLUSDT"]
 
 webhook = "https://oapi.dingtalk.com/robot/send?access_token=8a618559bef6178849439433ef9fe1e9a77a60eec9b45716acf18a1b6d4f8c05"
 
@@ -99,15 +99,15 @@ def check_volume(symbol, proxy_cycle):
 
 
     # 价格趋势未明的情况下，默认的放量倍数是6倍
-    volume_multiple = 6
+    volume_multiple = 5
     # 15分钟K线开盘价偏离MA7的基准，价格趋势未明的情况下默认偏离1%
-    price_deviation = 0.009
+    price_deviation = 0.008
     # 仓位大小，量能越大，代表分歧越大，开的仓位越大
     position = volume_times * 400
 
     # 逆势的情况，逆势操作的高要求      上涨趋势，涨幅过快或者下跌趋势，下跌过快
     if((uptrend and current_open > price_ma7 and current_close > price_ma7) or (downtrend and current_open < price_ma7 and price_ma7 > current_close)):
-        volume_multiple = 8
+        volume_multiple = 7
         position = volume_times * 200
         price_deviation = 0.015
 
@@ -161,7 +161,7 @@ def volume_spike_five_minute(proxy_cycle):
     current_volume = volumes[-1]           
     # 成交量放大倍数
     volume_times = current_volume / volume_ma96
-    if(volume_times > 10):
+    if(volume_times > 9.5):
        content=f"Lucky:🚨    ** BTC **\n {now.strftime('%H:%M:%S')}\n 当前5分钟成交量放大{volume_times:.1%}倍！\n"
        dingtalk_notify(webhook, content)
 
@@ -172,22 +172,23 @@ def schedule_volume_check(proxy_cycle):
     while True:
         now = datetime.now()
 
-        # 每隔5分钟监测BTC是否有异常放量
-        if now.minute in [4, 9, 14, 19, 24, 29, 34, 39, 44, 49, 54, 59] and now.second == 25:
-            print(f"⚡ {now.strftime('%Y-%m-%d %H:%M:%S')} 监测BTC异常放量...") 
-
         # 每隔15分钟更新一下K线日线趋势
         if now.minute in [10, 25, 40, 55] and now.second == 55:
             print(f"⚡ {now.strftime('%Y-%m-%d %H:%M:%S')} 更新日线趋势判断...")
             update_trend_dict(proxy_cycle)
 
+        # 每隔5分钟监测BTC是否有异常放量
+        if now.minute in [4, 9, 19, 24, 34, 39, 49, 54] and now.second == 50:
+            print(f"⚡ {now.strftime('%Y-%m-%d %H:%M:%S')} 监测BTC异常放量...") 
+
         # 判断当前时间是否是指定的检查时刻：
-        if now.minute in [14, 29, 44, 59] and now.second == 30:
+        if now.minute in [14, 29, 44, 59] and now.second == 40:
             print(f"⚡ {now.strftime('%Y-%m-%d %H:%M:%S')} 开始检查成交量...")
             for symbol in symbols:
                 check_volume(symbol, proxy_cycle)
                 # 每个代币取完数休息，避免请求频繁被币安屏蔽
                 time.sleep(0.3)
+
         # 完成一系列任务休眠1秒
         time.sleep(1) 
 
