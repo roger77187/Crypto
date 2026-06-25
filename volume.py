@@ -104,22 +104,25 @@ def volume_ma_15m(symbol, proxy_cycle):
         open_deviation = (current_open - price_ma14) / price_ma14
         close_deviation = (current_close - price_ma14) / price_ma14
 
+
+    # 超级异常放量情况，15分钟K线下跌5%，成交量放大10倍
+    if (open_deviation * volume_times > 0.5):
+            content=f"Lucky:🚨    ** {symbol} **\n {now.strftime('%H:%M:%S')}当前15分钟\n {volume_times:.1f}倍放量!\n 涨跌幅: {open_deviation:.1%}!\n"
+            dingtalk_notify(webhook, content)
+            return
+
+
     # 成交量放大倍数和收盘价偏移量
 
-    # 价格趋势未明的情况下，默认的放量倍数是4.5倍
+    # 价格趋势未明的情况下，默认的放量倍数是6倍
     volume_multiple = 6
-    # 15分钟K线开盘价偏离MA14的基准，价格趋势未明的情况下默认偏离0.6%
-    open_deviation_threshold = 0.008
-    # 15分钟K线价格偏离MA14和成交量放大倍数的乘积的基准，越大表示反抽动能越大
+    # 15分钟K线开盘价偏离MA14的基准，价格趋势未明的情况下默认偏离0.3%
+    open_deviation_threshold = 0.003
+    # 15分钟K线收盘价格偏离MA14和成交量放大倍数的乘积的基准，越大表示反抽动能越大
     price_volume_deviation_threshold = 0.025 * volume_multiple
     # 仓位大小，量能越大，代表分歧越大，开的仓位越大
     position = volume_times * 200
 
-    # 逆势的情况，逆势操作的高要求      上涨趋势，涨幅过快或者下跌趋势，下跌过快
-    # if((uptrend and current_open > price_ma14 and current_close > price_ma14) or (downtrend and current_open < price_ma14 and price_ma14 > current_close)):
-    #    volume_multiple = 6
-    #    open_deviation_threshold = 0.01
-    #    price_volume_deviation_threshold = 0.025 * volume_multiple
 
     # 顺势的情况，顺势操作可以降低要求     上涨趋势的回调或者下跌趋势的反弹
     if((uptrend and current_open < price_ma14 and price_ma14 > current_close) or (downtrend and current_open >  price_ma14 and price_ma14 < current_close) ) :
